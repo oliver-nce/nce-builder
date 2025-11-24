@@ -25,7 +25,7 @@ if (!function_exists('nce_runner_clean_output')) {
             add_filter('rest_pre_serve_request', function($served, $result, $request, $server) {
                 if (strpos($request->get_route(), '/nce/v1/') !== false) {
                     // Clean all output buffers
-                    while (ob_get_level() > 0) {
+                    while (ob_get_level() > 0)  {
                         ob_end_clean();
                     }
                 }
