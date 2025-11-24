@@ -30,7 +30,7 @@ if (!function_exists('nce_runner_clean_output')) {
                     }
                 }
                 return $served;
-            }, 999, 4);
+            }, 999, 4); 
         }
     }
 }
