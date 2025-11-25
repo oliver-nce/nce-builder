@@ -118,7 +118,7 @@ function nce_run_task(array $params): array {
     }
     
     // Build path to task file
-    $base_path = ABSPATH . 'wp-custom-scripts/';
+    $base_path = ABSPATH . 'wp-content/wp-custom-scripts/';
     $task_file = $base_path . $task_config['folder'] . '/' . $task_config['file'];
     
     // Check if task file exists
@@ -171,7 +171,7 @@ function nce_run_task(array $params): array {
  * Load all files from includes/ folder (shared utilities)
  */
 function nce_load_includes(): void {
-    $includes_path = ABSPATH . 'wp-custom-scripts/includes/';
+    $includes_path = ABSPATH . 'wp-content/wp-custom-scripts/includes/';
     
     if (!is_dir($includes_path)) {
         return;

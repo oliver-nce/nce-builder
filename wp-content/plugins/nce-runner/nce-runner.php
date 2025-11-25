@@ -35,6 +35,7 @@ if (!function_exists('nce_runner_clean_output')) {
     }
 }
 
+
 if (!function_exists('nce_runner_register_routes')) {
     add_action('rest_api_init', 'nce_runner_register_routes');
     function nce_runner_register_routes() {
@@ -85,7 +86,7 @@ if (!function_exists('nce_runner_rest_run')) {
         nce_debug_log('Parameters: ' . json_encode($params));
         
         // Load task manager
-        $task_manager = ABSPATH . 'wp-custom-scripts/nce-runner_task_manager.php';
+        $task_manager = ABSPATH . 'wp-content/wp-custom-scripts/nce-runner_task_manager.php';
         if (!file_exists($task_manager)) {
             nce_debug_log('ERROR: Task manager not found');
             header('Content-Type: application/json; charset=utf-8');
