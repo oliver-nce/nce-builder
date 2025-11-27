@@ -33,15 +33,15 @@ function nce_run_task(array $params): array {
         ],
         2 => [
             'folder'   => 'nce-runner-task-2',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'delete_all_data_sources.php',
+            'function' => 'nce_task_delete_all_data_sources',
+            'description' => 'Delete all Klaviyo data sources'
         ],
         3 => [
             'folder'   => 'nce-runner-task-3',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'bulk_upsert_profiles.php',
+            'function' => 'nce_task_upsert_klaviyo_profiles',
+            'description' => 'Bulk upsert Klaviyo profiles from database'
         ],
         4 => [
             'folder'   => 'nce-runner-task-4',

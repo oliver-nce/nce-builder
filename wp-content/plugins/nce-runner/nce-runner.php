@@ -7,6 +7,7 @@
  * Author: NCE
  */
 
+
 if (!defined('ABSPATH')) { exit; }
 
 // Suppress WordPress errors for our REST endpoint
