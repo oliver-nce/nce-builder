@@ -1,4 +1,4 @@
-<?php
+<?php // v1.5.0 - 2025-11-27 21:10
 declare(strict_types=1);
 
 /**
@@ -7,8 +7,11 @@ declare(strict_types=1);
  * Syncs profiles from wp_klaviyo_profiles table to Klaviyo using Bulk Import API.
  * - Validates query and column structure first
  * - Batches up to 10,000 profiles per request
- * - Sets email and SMS marketing consent to SUBSCRIBED
+ * - Creates/updates profiles with identifiers, names, and location
  * - Updates last_run_datetime on success
+ * 
+ * Note: Marketing consent cannot be set via bulk import API.
+ * Use subscription endpoints or list management separately if needed.
  * 
  * @param array $params Parameters from REST request:
  *                      - job_name (optional): defaults to 'profiles'
@@ -91,33 +94,54 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             ];
         }
         
-        // Validate required columns
-        $requiredColumns = ['email']; // At minimum need email
-        $recommendedColumns = ['phone_number', 'external_id', 'first_name', 'last_name'];
-        $locationColumns = ['city', 'region', 'country', 'zip'];
+        // Define valid Klaviyo profile columns
+        $validColumns = [
+            // Identifiers
+            'email', 'phone_number', 'external_id',
+            // Basic fields
+            'first_name', 'last_name', 'organization', 'title', 'image',
+            // Location fields
+            'city', 'region', 'country', 'zip', 'address1', 'address2',
+            'latitude', 'longitude', 'timezone',
+            // Metadata
+            'created_at', 'updated_at'
+        ];
         
         $firstRow = $testRows[0];
         $availableColumns = array_keys($firstRow);
         
-        // Check for required columns
-        $missingRequired = array_diff($requiredColumns, $availableColumns);
-        if (!empty($missingRequired)) {
-            $errorMsg = "Missing required columns: " . implode(', ', $missingRequired);
+        // Filter to only valid Klaviyo columns
+        $usableColumns = array_intersect($availableColumns, $validColumns);
+        $ignoredColumns = array_diff($availableColumns, $validColumns);
+        
+        // Check for at least one identifier
+        $identifierColumns = ['email', 'phone_number', 'external_id'];
+        $hasIdentifier = !empty(array_intersect($usableColumns, $identifierColumns));
+        
+        if (!$hasIdentifier) {
+            $errorMsg = "Query must return at least one identifier column: " . implode(', ', $identifierColumns);
             file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Available columns: " . implode(', ', $availableColumns) . "\n", FILE_APPEND);
             return [
                 'error' => $errorMsg,
                 'job_name' => $jobName,
                 'available_columns' => $availableColumns,
-                'required_columns' => $requiredColumns
+                'required_identifiers' => $identifierColumns
             ];
         }
         
         // Log column validation results
         file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Query validation passed\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Available columns: " . implode(', ', $availableColumns) . "\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Usable columns: " . implode(', ', $usableColumns) . "\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Note: Invalid emails/phones will be skipped automatically\n", FILE_APPEND);
         
-        $missingRecommended = array_diff($recommendedColumns, $availableColumns);
+        if (!empty($ignoredColumns)) {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Ignored columns (not valid for Klaviyo): " . implode(', ', $ignoredColumns) . "\n", FILE_APPEND);
+        }
+        
+        // Recommend additional useful columns if missing
+        $recommendedColumns = ['phone_number', 'external_id', 'first_name', 'last_name'];
+        $missingRecommended = array_diff($recommendedColumns, $usableColumns);
         if (!empty($missingRecommended)) {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Note: Missing recommended columns: " . implode(', ', $missingRecommended) . "\n", FILE_APPEND);
         }
@@ -157,6 +181,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         $totalBatches = count($batches);
         $syncedProfiles = 0;
         $failedBatches = 0;
+        $skippedProfiles = 0;
         $errors = [];
         
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} profiles each\n", FILE_APPEND);
@@ -170,16 +195,42 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             
             // Build profiles array for Klaviyo
             $profilesData = [];
+            $batchSkipped = 0;
             foreach ($batchProfiles as $profile) {
-                $profileData = nce_build_klaviyo_profile($profile, $availableColumns);
+                $profileData = nce_build_klaviyo_profile($profile, $usableColumns);
                 if ($profileData !== null) {
                     $profilesData[] = $profileData;
+                } else {
+                    $batchSkipped++;
                 }
+            }
+            
+            $skippedProfiles += $batchSkipped;
+            
+            if ($batchSkipped > 0) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}: Skipped {$batchSkipped} invalid profiles\n", FILE_APPEND);
             }
             
             if (empty($profilesData)) {
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}: No valid profiles to sync\n", FILE_APPEND);
                 continue;
+            }
+            
+            // Log sample profiles from first batch for debugging
+            if ($batchNum === 1 && !empty($profilesData)) {
+                // Log sample emails
+                $sampleEmails = array_slice(array_filter(array_map(function($p) {
+                    return $p['attributes']['email'] ?? null;
+                }, $profilesData)), 0, 5);
+                
+                if (!empty($sampleEmails)) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample emails being sent: " . implode(', ', $sampleEmails) . "\n", FILE_APPEND);
+                }
+                
+                // Log first 2 complete profiles for structure inspection
+                $sampleProfiles = array_slice($profilesData, 0, 2);
+                $sampleJson = json_encode($sampleProfiles, JSON_PRETTY_PRINT);
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample profile structures:\n{$sampleJson}\n", FILE_APPEND);
             }
             
             // Build bulk import job payload
@@ -206,15 +257,43 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             } else {
                 $failedBatches++;
                 $errorMsg = $response['error'] ?? 'Unknown error';
+                
+                // Log detailed error info with raw response
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
+                
+                // Log formatted error body
+                if (!empty($response['body'])) {
+                    $fullError = json_encode($response['body'], JSON_PRETTY_PRINT);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n", FILE_APPEND);
+                }
+                
+                // Log raw response for complete debugging
+                if (!empty($response['raw_body'])) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Raw response body:\n{$response['raw_body']}\n", FILE_APPEND);
+                }
+                
+                // Extract all error details from Klaviyo's errors array
+                $allErrors = [];
+                if (!empty($response['body']['errors'])) {
+                    foreach ($response['body']['errors'] as $err) {
+                        $allErrors[] = [
+                            'title' => $err['title'] ?? '',
+                            'detail' => $err['detail'] ?? '',
+                            'source' => $err['source'] ?? null,
+                            'meta' => $err['meta'] ?? null
+                        ];
+                    }
+                }
+                
                 $errorDetail = [
                     'batch' => $batchNum,
                     'http_status' => $response['http'],
                     'error' => $errorMsg,
-                    'profile_count' => count($profilesData)
+                    'profile_count' => count($profilesData),
+                    'klaviyo_errors' => $allErrors
                 ];
                 $errors[] = $errorDetail;
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
-                error_log("nce_task_upsert_klaviyo_profiles: Batch {$batchNum} failed - HTTP {$response['http']}");
+                error_log("nce_task_upsert_klaviyo_profiles: Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}");
             }
             
             // Rate limiting: pause between batches (10/s burst, 150/m steady)
@@ -243,6 +322,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         // --- 6. Summary ---
         $completionMsg = "[" . date('H:i:s') . "] --- SYNC COMPLETE ---\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total profiles found: {$totalProfiles}\n";
+        $completionMsg .= "[" . date('H:i:s') . "] Skipped (invalid): {$skippedProfiles}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Batches processed: {$totalBatches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Profiles synced: {$syncedProfiles}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Failed batches: {$failedBatches}\n";
@@ -256,6 +336,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             'message' => 'Profile sync completed',
             'job_name' => $jobName,
             'total_found' => $totalProfiles,
+            'skipped_invalid' => $skippedProfiles,
             'synced' => $syncedProfiles,
             'batches_processed' => $totalBatches,
             'failed_batches' => $failedBatches,
@@ -274,15 +355,70 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
  * Build Klaviyo profile payload from database row
  * 
  * @param array $profile Database row
- * @param array $availableColumns List of column names in the row
+ * @param array $usableColumns List of valid Klaviyo column names to use
  * @return array|null Profile payload or null if invalid
  */
 if (!function_exists('nce_build_klaviyo_profile')) {
-    function nce_build_klaviyo_profile(array $profile, array $availableColumns): ?array {
+    function nce_build_klaviyo_profile(array $profile, array $usableColumns): ?array {
         // Must have at least one identifier
-        $email = !empty($profile['email']) ? trim($profile['email']) : null;
+        // Clean and normalize email
+        $email = !empty($profile['email']) ? strtolower(trim($profile['email'])) : null;
         $phone = !empty($profile['phone_number']) ? trim($profile['phone_number']) : null;
         $externalId = !empty($profile['external_id']) ? trim($profile['external_id']) : null;
+        
+        // Validate email if present (Klaviyo has strict requirements)
+        if ($email) {
+            // 0. Check for placeholder/null values
+            $invalidPatterns = ['null', 'none', 'n/a', 'na', 'test', '(null)', 'undefined', 'email'];
+            if (in_array($email, $invalidPatterns) || strlen($email) < 3) {
+                error_log("nce_build_klaviyo_profile: Skipping placeholder email: {$email}");
+                return null;
+            }
+            
+            // 1. Basic format check
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                error_log("nce_build_klaviyo_profile: Skipping invalid email format: {$email}");
+                return null;
+            }
+            
+            // 2. Must have @ and domain with TLD
+            if (!preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email)) {
+                error_log("nce_build_klaviyo_profile: Skipping email (no valid domain): {$email}");
+                return null;
+            }
+            
+            // 3. TLD must be at least 2 characters (e.g., .com not .c)
+            if (!preg_match('/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/', $email)) {
+                error_log("nce_build_klaviyo_profile: Skipping email (invalid TLD): {$email}");
+                return null;
+            }
+            
+            // 4. No spaces or special invalid characters
+            if (preg_match('/[\s\(\)\[\]\{\}<>]/', $email)) {
+                error_log("nce_build_klaviyo_profile: Skipping email (invalid characters): {$email}");
+                return null;
+            }
+            
+            // 5. Check for obviously fake domains
+            $fakeDomains = ['test.com', 'example.com', 'localhost', 'test', 'none', 'null', 'n/a'];
+            $domain = strtolower(substr(strrchr($email, '@'), 1));
+            if (in_array($domain, $fakeDomains) || empty($domain)) {
+                error_log("nce_build_klaviyo_profile: Skipping email (fake/empty domain): {$email}");
+                return null;
+            }
+            
+            // 6. Email must not be longer than 254 characters (RFC limit)
+            if (strlen($email) > 254) {
+                error_log("nce_build_klaviyo_profile: Skipping email (too long): {$email}");
+                return null;
+            }
+        }
+        
+        // Validate phone if present (must start with +)
+        if ($phone && !preg_match('/^\+\d{10,15}$/', $phone)) {
+            error_log("nce_build_klaviyo_profile: Skipping invalid phone: {$phone}");
+            return null; // Skip profiles with invalid phone
+        }
         
         if (empty($email) && empty($phone) && empty($externalId)) {
             return null; // Skip profiles without any identifier
@@ -297,25 +433,25 @@ if (!function_exists('nce_build_klaviyo_profile')) {
         if ($externalId) $attributes['external_id'] = $externalId;
         
         // Add basic fields
-        if (in_array('first_name', $availableColumns) && !empty($profile['first_name'])) {
+        if (in_array('first_name', $usableColumns) && !empty($profile['first_name'])) {
             $attributes['first_name'] = trim($profile['first_name']);
         }
-        if (in_array('last_name', $availableColumns) && !empty($profile['last_name'])) {
+        if (in_array('last_name', $usableColumns) && !empty($profile['last_name'])) {
             $attributes['last_name'] = trim($profile['last_name']);
         }
         
         // Build location object
         $location = [];
-        if (in_array('city', $availableColumns) && !empty($profile['city'])) {
+        if (in_array('city', $usableColumns) && !empty($profile['city'])) {
             $location['city'] = trim($profile['city']);
         }
-        if (in_array('region', $availableColumns) && !empty($profile['region'])) {
+        if (in_array('region', $usableColumns) && !empty($profile['region'])) {
             $location['region'] = trim($profile['region']);
         }
-        if (in_array('country', $availableColumns) && !empty($profile['country'])) {
+        if (in_array('country', $usableColumns) && !empty($profile['country'])) {
             $location['country'] = trim($profile['country']);
         }
-        if (in_array('zip', $availableColumns) && !empty($profile['zip'])) {
+        if (in_array('zip', $usableColumns) && !empty($profile['zip'])) {
             $location['zip'] = trim($profile['zip']);
         }
         
@@ -323,25 +459,8 @@ if (!function_exists('nce_build_klaviyo_profile')) {
             $attributes['location'] = $location;
         }
         
-        // Build subscriptions (consent)
-        $subscriptions = [
-            'email' => [
-                'marketing' => [
-                    'consent' => 'SUBSCRIBED'
-                ]
-            ]
-        ];
-        
-        // Add SMS consent only if phone exists
-        if ($phone) {
-            $subscriptions['sms'] = [
-                'marketing' => [
-                    'consent' => 'SUBSCRIBED'
-                ]
-            ];
-        }
-        
-        $attributes['subscriptions'] = $subscriptions;
+        // Note: subscriptions/consent cannot be set via bulk import API
+        // Marketing consent must be managed separately via subscription endpoints
         
         // Return profile payload
         return [
@@ -380,12 +499,34 @@ if (!function_exists('nce_klaviyo_bulk_request')) {
         
         $res  = wp_remote_request($url, $args);
         $http = is_wp_error($res) ? 0 : (int) wp_remote_retrieve_response_code($res);
-        $body = is_wp_error($res) ? ['error' => $res->get_error_message()] : json_decode(wp_remote_retrieve_body($res), true);
+        $rawBody = is_wp_error($res) ? '' : wp_remote_retrieve_body($res);
+        $body = is_wp_error($res) ? ['error' => $res->get_error_message()] : json_decode($rawBody, true);
+        
+        // Extract detailed error message
+        $errorMsg = null;
+        if (is_wp_error($res)) {
+            $errorMsg = $res->get_error_message();
+        } elseif (!empty($body['errors'])) {
+            // Klaviyo returns errors array with detailed information
+            $firstError = $body['errors'][0];
+            $errorMsg = $firstError['detail'] ?? 'Unknown error';
+            
+            // Add source information if available (tells which field caused the error)
+            if (!empty($firstError['source'])) {
+                $errorMsg .= ' (Source: ' . json_encode($firstError['source']) . ')';
+            }
+            
+            // Add meta information if available
+            if (!empty($firstError['meta'])) {
+                $errorMsg .= ' (Meta: ' . json_encode($firstError['meta']) . ')';
+            }
+        }
         
         return [
-            'http'  => $http,
-            'body'  => $body,
-            'error' => is_wp_error($res) ? $res->get_error_message() : ($body['errors'][0]['detail'] ?? null),
+            'http'     => $http,
+            'body'     => $body,
+            'error'    => $errorMsg,
+            'raw_body' => $rawBody, // For full debugging
         ];
     }
 }
