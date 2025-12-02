@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Bulk Upsert Klaviyo Profiles - Task 3
- * 
+ * ---
  * Syncs profiles from wp_klaviyo_profiles table to Klaviyo using Bulk Import API.
  * - Validates query and column structure first
  * - Batches up to 10,000 profiles per request
