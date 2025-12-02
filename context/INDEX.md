@@ -1,15 +1,64 @@
-# Chunk Index
+# Klaviyo API – AI PHP Coding Project  
+## Context Document Index
 
-- Target tokens per chunk: 800
-- Overlap ratio: 0.3
-- Chunking is Markdown-aware; fenced code blocks are never split.
+This index defines the authoritative structure of the RAG context used for an AI agent generating PHP code against the Klaviyo APIs.
 
-- 000_api_overview_chunk_01.md (from 000_api_overview.md)
-- 000_api_overview_chunk_02.md (from 000_api_overview.md)
-- 000_api_overview_chunk_03.md (from 000_api_overview.md)
-- 010_profiles_create_or_update_profile_chunk_01.md (from 010_profiles_create_or_update_profile.md)
-- 020_profiles_bulk_import_profiles_chunk_01.md (from 020_profiles_bulk_import_profiles.md)
-- 021_profiles_bulk_import_jobs_status_chunk_01.md (from 021_profiles_bulk_import_jobs_status.md)
-- 030_events_create_and_get_events_chunk_01.md (from 030_events_create_and_get_events.md)
-- 040_catalogs_core_get_items_and_model_chunk_01.md (from 040_catalogs_core_get_items_and_model.md)
-- 050_rate_limits_and_errors_chunk_01.md (from 050_rate_limits_and_errors.md)
+Scope is intentionally limited to:
+- Profile creation and updates
+- Consent, opt-in, opt-out, suppression, and unsuppression
+- Correct handling of transactional vs marketing email/SMS
+- Explicit exclusion of list-based “subscriptions” as a primary concern
+
+---
+
+## 1. Core API & Profile Handling
+
+- Klaviyo_API_Overview.md
+- Klaviyo_Profile_Object.md
+- Klaviyo_Profile_Create_and_Update.md
+- Klaviyo_Profile_Bulk_Import_Limits.md
+
+---
+
+## 2. Consent, Suppression & Messaging Rules
+
+- Klaviyo_Consent_Overview.md
+- Klaviyo_Email_Consent.md
+- Klaviyo_SMS_Consent.md
+- Klaviyo_Suppression_vs_Unsubscribe.md
+- Klaviyo_Transactional_vs_Marketing_Behavior.md
+
+---
+
+## 3. RAG Control & Decision Chunks  
+*(Authoritative reasoning and control logic for the agent)*
+
+- RAG_Chunk_A_Core_Rules.md
+- RAG_Chunk_B_Headers.md
+- RAG_Chunk_C_Subscribe.md
+- RAG_Chunk_D_Unsubscribe.md
+- RAG_Chunk_E_Suppress.md
+- RAG_Chunk_F_Unsuppress.md
+- RAG_Chunk_G_Decision_Table.md
+- Klaviyo Transactional vs Marketing Consent SMS & Email (Summary).md
+
+---
+
+## 4. PHP Implementation References
+
+- PHP_Klaviyo_Auth_and_Headers.md
+- PHP_Profile_Create_Update_Examples.md
+- PHP_Consent_and_Suppression_Examples.md
+- PHP_Error_Handling_and_Retry.md
+
+---
+
+## Notes
+
+- Bulk profile import endpoints **do NOT modify consent, subscription, or suppression state**.
+- Transactional email and SMS are permitted regardless of marketing consent.
+- Marketing email/SMS require explicit profile-level consent.
+- Lists (“subscriptions”) are not the authoritative consent model and are secondary to profile settings.
+- Code blocks are duplicated across chunks where necessary to prevent cross-chunk splitting.
+
+End of index.

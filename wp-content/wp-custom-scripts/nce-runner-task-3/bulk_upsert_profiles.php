@@ -15,7 +15,7 @@ declare(strict_types=1);
  * 
  * @param array $params Parameters from REST request:
  *                      - job_name (optional): defaults to 'profiles'
- * @return array Summary with sync results
+ * @return array Summary with sync results   
  */
 if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
     function nce_task_upsert_klaviyo_profiles(array $params = []): array {

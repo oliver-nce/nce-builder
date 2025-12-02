@@ -1,4 +1,6 @@
 <?php
+// LAST UPDATED: 2025-11-28 19:05:00
+// v2.2.0 - 2025-11-28 (Added Task 7 & 8 for SMS backfill)
 /**
  * NCE Runner Task Manager
  * 
@@ -8,7 +10,7 @@
  * @param array $params All parameters from REST request
  * @return array Result from task execution
  */
-
+  
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -45,33 +47,33 @@ function nce_run_task(array $params): array {
         ],
         4 => [
             'folder'   => 'nce-runner-task-4',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'grant_email_consent.php',
+            'function' => 'nce_task_grant_email_consent',
+            'description' => 'Grant email consent for NEW profiles (lookback window)'
         ],
         5 => [
             'folder'   => 'nce-runner-task-5',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'grant_sms_consent.php',
+            'function' => 'nce_task_grant_sms_consent',
+            'description' => 'Grant SMS consent for NEW profiles (requires explicit opt-in)'
         ],
         6 => [
             'folder'   => 'nce-runner-task-6',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'bulk_unsubscribe_emails.php',
+            'function' => 'nce_task_bulk_unsubscribe_emails',
+            'description' => 'Bulk unsubscribe emails from marketing (suppression list)'
         ],
         7 => [
             'folder'   => 'nce-runner-task-7',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'fetch_and_cache_profiles.php',
+            'function' => 'nce_task_fetch_and_cache_profiles',
+            'description' => 'Fetch & cache ALL profiles with phone numbers to database'
         ],
         8 => [
             'folder'   => 'nce-runner-task-8',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'process_cached_profiles.php',
+            'function' => 'nce_task_process_cached_profiles',
+            'description' => 'Process cached profiles in batches - grant SMS consent'
         ],
         9 => [
             'folder'   => 'nce-runner-task-9',
@@ -128,7 +130,7 @@ function nce_run_task(array $params): array {
             'task' => $task_num,
             'expected_path' => $task_file
         ];
-    }
+    } 
     
     // Load task file
     require_once $task_file;
