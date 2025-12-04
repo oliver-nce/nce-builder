@@ -1,0 +1,1277 @@
+<!-- Product Eligibility Table Editor - Embed on WordPress page using Custom HTML block or [product_eligibility_editor] shortcode -->
+<div id="te-widget">
+  <style>
+    #te-widget {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      max-width: 100%;
+      margin: 20px auto;
+      color: #1a1a2e;
+    }
+    
+    #te-widget * { box-sizing: border-box; }
+    
+    /* Header */
+    #te-widget .te-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    #te-widget h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    
+    #te-widget .te-subtitle {
+      color: #6b7280;
+      font-size: 0.9rem;
+      margin: 4px 0 0 0;
+    }
+    
+    /* Buttons */
+    #te-widget .te-btn {
+      padding: 10px 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    #te-widget .te-btn-primary {
+      color: #000;
+      background: #d4e157;
+      box-shadow: 0 2px 8px rgba(212, 225, 87, 0.3);
+    }
+    
+    #te-widget .te-btn-primary:hover:not(:disabled) {
+      background: #c6d449;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(212, 225, 87, 0.4);
+    }
+    
+    #te-widget .te-btn-secondary {
+      color: #374151;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+    }
+    
+    #te-widget .te-btn-secondary:hover:not(:disabled) {
+      background: #e5e7eb;
+      border-color: #9ca3af;
+    }
+    
+    #te-widget .te-btn-danger {
+      color: #fff;
+      background: #dc2626;
+    }
+    
+    #te-widget .te-btn-danger:hover:not(:disabled) {
+      background: #b91c1c;
+    }
+    
+    #te-widget .te-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    
+    #te-widget .te-btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+    
+    /* Toolbar */
+    #te-widget .te-toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    
+    #te-widget .te-toolbar-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    #te-widget .te-safety-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #dc2626;
+    }
+    
+    #te-widget .te-safety-toggle input {
+      cursor: pointer;
+    }
+    
+    /* Column Controls */
+    #te-widget .te-column-controls {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    
+    #te-widget .te-column-controls-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    #te-widget .te-column-controls-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #374151;
+    }
+    
+    #te-widget .te-column-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    
+    #te-widget .te-column-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    
+    #te-widget .te-column-toggle:hover {
+      border-color: #9ca3af;
+    }
+    
+    #te-widget .te-column-toggle.hidden {
+      background: #f3f4f6;
+      color: #9ca3af;
+    }
+    
+    #te-widget .te-column-toggle.dragging {
+      opacity: 0.5;
+      background: #d4e157;
+    }
+    
+    #te-widget .te-column-toggle .drag-handle {
+      cursor: grab;
+      color: #9ca3af;
+    }
+    
+    #te-widget .te-column-toggle .drag-handle:active {
+      cursor: grabbing;
+    }
+    
+    /* Status Bar */
+    #te-widget .te-status {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      display: none;
+    }
+    
+    #te-widget .te-status.visible { display: block; }
+    #te-widget .te-status.info { background: #f0f4ff; border: 1px solid #c7d2fe; color: #4f46e5; }
+    #te-widget .te-status.success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #059669; }
+    #te-widget .te-status.error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+    #te-widget .te-status.warning { background: #fffbeb; border: 1px solid #fde68a; color: #d97706; }
+    
+    /* Table Container */
+    #te-widget .te-table-container {
+      overflow-x: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+    
+    /* Table */
+    #te-widget table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    
+    #te-widget thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    #te-widget th {
+      background: #1f2937;
+      color: #fff;
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      white-space: normal;
+      word-wrap: break-word;
+      position: relative;
+      user-select: none;
+    }
+    
+    #te-widget th .th-label {
+      display: block;
+      padding-right: 8px;
+    }
+    
+    #te-widget th.sortable { cursor: pointer; }
+    #te-widget th.sortable:hover { background: #374151; }
+    
+    #te-widget th .resize-handle {
+      position: absolute;
+      right: -6px;
+      top: 0;
+      bottom: 0;
+      width: 12px;
+      cursor: col-resize;
+      background: transparent;
+      z-index: 5;
+    }
+    
+    #te-widget th .resize-handle::after {
+      content: '';
+      position: absolute;
+      right: 5px;
+      top: 4px;
+      bottom: 4px;
+      width: 2px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 1px;
+    }
+    
+    #te-widget th .resize-handle:hover::after,
+    #te-widget th.resizing .resize-handle::after {
+      background: #d4e157;
+    }
+    
+    #te-widget th.resizing {
+      background: #374151;
+    }
+    
+    #te-widget td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      white-space: normal;
+      word-wrap: break-word;
+      vertical-align: top;
+    }
+    
+    #te-widget tr:hover td {
+      background: #f9fafb;
+    }
+    
+    #te-widget tr.editing td {
+      background: #fffbeb;
+    }
+    
+    #te-widget .te-cell-readonly {
+      color: #9ca3af;
+      font-style: italic;
+    }
+    
+    #te-widget .te-cell-primary {
+      font-weight: 600;
+      color: #4f46e5;
+    }
+    
+    /* Editable Cell */
+    #te-widget .te-cell-edit {
+      width: 100%;
+      padding: 4px 6px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+    
+    #te-widget .te-cell-edit:focus {
+      outline: none;
+      border-color: #d4e157;
+      box-shadow: 0 0 0 2px rgba(212, 225, 87, 0.3);
+    }
+    
+    #te-widget .te-cell-edit:disabled {
+      background: #f3f4f6;
+      color: #9ca3af;
+    }
+    
+    #te-widget textarea.te-cell-edit {
+      min-height: 60px;
+      resize: vertical;
+    }
+    
+    /* Action Buttons in Row */
+    #te-widget .te-row-actions {
+      display: flex;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    
+    #te-widget .te-row-btn {
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    #te-widget .te-row-btn-edit {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    
+    #te-widget .te-row-btn-edit:hover { background: #bfdbfe; }
+    
+    #te-widget .te-row-btn-save {
+      background: #d1fae5;
+      color: #059669;
+    }
+    
+    #te-widget .te-row-btn-save:hover { background: #a7f3d0; }
+    
+    #te-widget .te-row-btn-cancel {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+    
+    #te-widget .te-row-btn-cancel:hover { background: #e5e7eb; }
+    
+    #te-widget .te-row-btn-delete {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    
+    #te-widget .te-row-btn-delete:hover { background: #fecaca; }
+    #te-widget .te-row-btn-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+    
+    /* Find Mode */
+    #te-widget .te-find-row td {
+      background: #f0f4ff;
+      padding: 6px 8px;
+    }
+    
+    #te-widget .te-find-input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 2px solid #c7d2fe;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+    
+    #te-widget .te-find-input:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+    
+    /* Pagination */
+    #te-widget .te-pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding: 10px 0;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    #te-widget .te-pagination-info {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    
+    #te-widget .te-pagination-controls {
+      display: flex;
+      gap: 6px;
+    }
+    
+    /* Modal */
+    #te-widget .te-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    #te-widget .te-modal-overlay.visible {
+      display: flex;
+    }
+    
+    #te-widget .te-modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    
+    #te-widget .te-modal h3 {
+      margin: 0 0 16px 0;
+      font-size: 1.2rem;
+    }
+    
+    #te-widget .te-modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+    
+    /* Loading */
+    #te-widget .te-loading {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+    
+    #te-widget .te-spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #d4e157;
+      border-radius: 50%;
+      animation: te-spin 0.8s linear infinite;
+    }
+    
+    @keyframes te-spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Empty State */
+    #te-widget .te-empty {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+  </style>
+
+  <div class="te-header">
+    <div>
+      <h2>Product Eligibility Editor</h2>
+      <p class="te-subtitle">View and edit wp_zoho_product_eligibility table</p>
+    </div>
+    <div class="te-toolbar-group">
+      <button class="te-btn te-btn-secondary" onclick="TE.toggleColumnControls()">
+        ⚙️ Columns
+      </button>
+    </div>
+  </div>
+  
+  <div class="te-column-controls" id="te-column-controls" style="display: none;">
+    <div class="te-column-controls-header">
+      <span class="te-column-controls-title">Show/Hide & Reorder Columns (drag to reorder)</span>
+      <div>
+        <button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.showAllColumns()">Show All</button>
+        <button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.hideAllColumns()">Hide All</button>
+        <button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.resetColumns()">Reset</button>
+      </div>
+    </div>
+    <div class="te-column-toggles" id="te-column-toggles"></div>
+  </div>
+  
+  <div class="te-toolbar">
+    <div class="te-toolbar-group">
+      <button class="te-btn te-btn-primary" id="te-btn-find" onclick="TE.toggleFindMode()">
+        🔍 Find
+      </button>
+      <button class="te-btn te-btn-secondary" id="te-btn-show-all" onclick="TE.showAllRecords()" style="display: none;">
+        📋 Show All
+      </button>
+      <button class="te-btn te-btn-primary" id="te-btn-add" onclick="TE.addNewRecord()" disabled>
+        ➕ Add Record
+      </button>
+      <button class="te-btn te-btn-secondary" onclick="TE.refresh()">
+        🔄 Refresh
+      </button>
+    </div>
+    <div class="te-safety-toggle">
+      <input type="checkbox" id="te-enable-destructive" onchange="TE.toggleDestructive()">
+      <label for="te-enable-destructive">Enable Add/Delete</label>
+    </div>
+  </div>
+  
+  <div class="te-status" id="te-status"></div>
+  
+  <div class="te-table-container">
+    <table id="te-table">
+      <thead id="te-thead"></thead>
+      <tbody id="te-tbody"></tbody>
+    </table>
+  </div>
+  
+  <div class="te-pagination" id="te-pagination"></div>
+  
+  <!-- Delete Confirmation Modal -->
+  <div class="te-modal-overlay" id="te-delete-modal">
+    <div class="te-modal">
+      <h3>⚠️ Confirm Delete</h3>
+      <p>Are you sure you want to delete this record?</p>
+      <p><strong>wp_id:</strong> <span id="te-delete-id"></span></p>
+      <div class="te-modal-actions">
+        <button class="te-btn te-btn-secondary" onclick="TE.closeDeleteModal()">Cancel</button>
+        <button class="te-btn te-btn-danger" onclick="TE.confirmDelete()">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const baseUrl = window.location.origin;
+  const API_BASE = `${baseUrl}/wp-json/table-editor/v1`;
+  const STORAGE_KEY = 'te_product_eligibility_prefs';
+  
+  // Column definitions
+  const COLUMNS = [
+    { name: 'wp_id', type: 'varchar', primary: true, editable: false, required: true },
+    { name: 'name', type: 'varchar', editable: true },
+    { name: 'venue_id', type: 'int', editable: true },
+    { name: 'venue_short_name', type: 'varchar', editable: true },
+    { name: 'sku_old', type: 'varchar', editable: true },
+    { name: 'sku_ext_1', type: 'varchar', editable: true },
+    { name: 'sku_ext_2', type: 'varchar', editable: true },
+    { name: 'status', type: 'varchar', editable: true },
+    { name: 'max_yob', type: 'varchar', editable: true },
+    { name: 'min_yob', type: 'varchar', editable: true },
+    { name: 'max_rating', type: 'varchar', editable: true },
+    { name: 'min_rating', type: 'varchar', editable: true },
+    { name: 'Males', type: 'varchar', editable: true },
+    { name: 'Females', type: 'varchar', editable: true },
+    { name: 'product_type', type: 'varchar', editable: true },
+    { name: 'Field_Players', type: 'varchar', editable: true },
+    { name: 'Gk_s', type: 'varchar', editable: true },
+    { name: 'Sessions', type: 'text', editable: true },
+    { name: 'enrollment_max', type: 'varchar', editable: true },
+    { name: 'Message', type: 'text', editable: true },
+    { name: 'enrollment_close_date', type: 'date', editable: true },
+    { name: 'first_session_date', type: 'date', editable: true },
+    { name: 'days_apart', type: 'tinyint', editable: true },
+    { name: 'number_of_sessions', type: 'int', editable: true },
+    { name: 'session_dates', type: 'text', editable: true },
+    { name: 'session1_time', type: 'time', editable: true },
+    { name: 'session2_time', type: 'time', editable: true },
+    { name: 'min_yob_for_session_1', type: 'varchar', editable: true },
+    { name: 'year', type: 'int', editable: false, generated: true },
+    { name: 'month', type: 'int', editable: false, generated: true },
+    { name: 'position_filter', type: 'varchar', editable: false, generated: true },
+    { name: 'gender_filter', type: 'varchar', editable: false, generated: true },
+    { name: 'sku', type: 'varchar', editable: false, generated: true },
+  ];
+  
+  // State
+  let state = {
+    records: [],
+    total: 0,
+    page: 1,
+    perPage: 100,
+    totalPages: 1,
+    columnOrder: COLUMNS.map(c => c.name),
+    columnVisibility: Object.fromEntries(COLUMNS.map(c => [c.name, true])),
+    columnWidths: {},
+    findMode: false,
+    searchMode: false,
+    editingRow: null,
+    editingData: {},
+    addingNew: false,
+    newRowData: {},
+    destructiveEnabled: false,
+    deleteTarget: null,
+  };
+  
+  // Load preferences from localStorage
+  function loadPreferences() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const prefs = JSON.parse(saved);
+        if (prefs.columnOrder) state.columnOrder = prefs.columnOrder;
+        if (prefs.columnVisibility) state.columnVisibility = { ...state.columnVisibility, ...prefs.columnVisibility };
+        if (prefs.columnWidths) state.columnWidths = prefs.columnWidths;
+      }
+    } catch (e) {
+      console.warn('Failed to load preferences:', e);
+    }
+  }
+  
+  // Save preferences to localStorage
+  function savePreferences() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        columnOrder: state.columnOrder,
+        columnVisibility: state.columnVisibility,
+        columnWidths: state.columnWidths,
+      }));
+    } catch (e) {
+      console.warn('Failed to save preferences:', e);
+    }
+  }
+  
+  // Show status message
+  function showStatus(message, type = 'info') {
+    const el = document.getElementById('te-status');
+    el.textContent = message;
+    el.className = `te-status visible ${type}`;
+    if (type === 'success') {
+      setTimeout(() => { el.classList.remove('visible'); }, 3000);
+    }
+  }
+  
+  function hideStatus() {
+    document.getElementById('te-status').classList.remove('visible');
+  }
+  
+  // API calls
+  async function apiCall(endpoint, options = {}) {
+    const url = `${API_BASE}${endpoint}`;
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': (typeof wpApiSettings !== 'undefined') ? wpApiSettings.nonce : '',
+      },
+      credentials: 'same-origin',
+      ...options,
+    });
+    return response.json();
+  }
+  
+  // Fetch records
+  async function fetchRecords() {
+    showStatus('Loading records...', 'info');
+    try {
+      const data = await apiCall(`/records?page=${state.page}&per_page=${state.perPage}`);
+      if (data.success) {
+        state.records = data.records;
+        state.total = data.total;
+        state.totalPages = data.total_pages;
+        state.searchMode = false;
+        hideStatus();
+        render();
+      } else {
+        showStatus(data.message || 'Failed to load records', 'error');
+      }
+    } catch (e) {
+      showStatus('Error: ' + e.message, 'error');
+    }
+  }
+  
+  // Search records
+  async function searchRecords(criteria) {
+    showStatus('Searching...', 'info');
+    try {
+      const data = await apiCall(`/search?page=${state.page}&per_page=${state.perPage}`, {
+        method: 'POST',
+        body: JSON.stringify(criteria),
+      });
+      if (data.success) {
+        state.records = data.records;
+        state.total = data.total;
+        state.totalPages = data.total_pages;
+        state.searchMode = true;
+        showStatus(`Found ${data.total} matching record(s)`, 'success');
+        render();
+      } else {
+        showStatus(data.message || 'Search failed', 'error');
+      }
+    } catch (e) {
+      showStatus('Error: ' + e.message, 'error');
+    }
+  }
+  
+  // Create record
+  async function createRecord(data) {
+    showStatus('Creating record...', 'info');
+    try {
+      const result = await apiCall('/records', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      if (result.success) {
+        showStatus('Record created successfully', 'success');
+        state.addingNew = false;
+        state.newRowData = {};
+        fetchRecords();
+      } else {
+        showStatus(result.message || 'Failed to create record', 'error');
+      }
+    } catch (e) {
+      showStatus('Error: ' + e.message, 'error');
+    }
+  }
+  
+  // Update record
+  async function updateRecord(wpId, data) {
+    showStatus('Saving changes...', 'info');
+    try {
+      const result = await apiCall(`/records/${encodeURIComponent(wpId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      if (result.success) {
+        showStatus('Record updated successfully', 'success');
+        state.editingRow = null;
+        state.editingData = {};
+        // Update local record
+        const idx = state.records.findIndex(r => r.wp_id === wpId);
+        if (idx >= 0) state.records[idx] = result.record;
+        render();
+      } else {
+        showStatus(result.message || 'Failed to update record', 'error');
+      }
+    } catch (e) {
+      showStatus('Error: ' + e.message, 'error');
+    }
+  }
+  
+  // Delete record
+  async function deleteRecord(wpId) {
+    showStatus('Deleting record...', 'info');
+    try {
+      const result = await apiCall(`/records/${encodeURIComponent(wpId)}`, {
+        method: 'DELETE',
+      });
+      if (result.success) {
+        showStatus('Record deleted successfully', 'success');
+        fetchRecords();
+      } else {
+        showStatus(result.message || 'Failed to delete record', 'error');
+      }
+    } catch (e) {
+      showStatus('Error: ' + e.message, 'error');
+    }
+  }
+  
+  // Get visible columns in order
+  function getVisibleColumns() {
+    return state.columnOrder.filter(name => state.columnVisibility[name]);
+  }
+  
+  // Get column definition by name
+  function getColumnDef(name) {
+    return COLUMNS.find(c => c.name === name);
+  }
+  
+  // Get default width for column based on name length
+  function getDefaultWidth(name) {
+    const minWidth = 80;
+    const charWidth = 8;
+    return Math.max(minWidth, name.length * charWidth + 40);
+  }
+  
+  // Get column width
+  function getColumnWidth(name) {
+    return state.columnWidths[name] || getDefaultWidth(name);
+  }
+  
+  // Render column toggles
+  function renderColumnToggles() {
+    const container = document.getElementById('te-column-toggles');
+    container.innerHTML = '';
+    
+    state.columnOrder.forEach((colName, index) => {
+      const isVisible = state.columnVisibility[colName];
+      const col = getColumnDef(colName);
+      
+      const toggle = document.createElement('div');
+      toggle.className = `te-column-toggle ${isVisible ? '' : 'hidden'}`;
+      toggle.draggable = true;
+      toggle.dataset.column = colName;
+      toggle.innerHTML = `
+        <span class="drag-handle">⋮⋮</span>
+        <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="TE.toggleColumn('${colName}')">
+        <span>${colName}${col.generated ? ' (gen)' : ''}</span>
+      `;
+      
+      // Drag events
+      toggle.addEventListener('dragstart', (e) => {
+        toggle.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', colName);
+      });
+      
+      toggle.addEventListener('dragend', () => {
+        toggle.classList.remove('dragging');
+      });
+      
+      toggle.addEventListener('dragover', (e) => {
+        e.preventDefault();
+      });
+      
+      toggle.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const draggedCol = e.dataTransfer.getData('text/plain');
+        const targetCol = colName;
+        if (draggedCol !== targetCol) {
+          reorderColumns(draggedCol, targetCol);
+        }
+      });
+      
+      container.appendChild(toggle);
+    });
+  }
+  
+  // Reorder columns
+  function reorderColumns(draggedCol, targetCol) {
+    const order = [...state.columnOrder];
+    const fromIdx = order.indexOf(draggedCol);
+    const toIdx = order.indexOf(targetCol);
+    
+    order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, draggedCol);
+    
+    state.columnOrder = order;
+    savePreferences();
+    renderColumnToggles();
+    render();
+  }
+  
+  // Render table header
+  function renderHeader() {
+    const thead = document.getElementById('te-thead');
+    const visibleCols = getVisibleColumns();
+    
+    let html = '<tr>';
+    html += '<th style="width: 100px; min-width: 100px;">Actions</th>';
+    
+    visibleCols.forEach(colName => {
+      const width = getColumnWidth(colName);
+      const col = getColumnDef(colName);
+      const label = col.generated ? `${colName} (gen)` : colName;
+      html += `<th style="width: ${width}px; min-width: 60px;" data-column="${colName}">
+        <span class="th-label">${label}</span>
+        <div class="resize-handle" data-resize-col="${colName}"></div>
+      </th>`;
+    });
+    
+    html += '</tr>';
+    
+    // Find mode row
+    if (state.findMode) {
+      html += '<tr class="te-find-row">';
+      html += '<td><button class="te-btn te-btn-sm te-btn-primary" onclick="TE.performFind()">Find</button></td>';
+      visibleCols.forEach(colName => {
+        html += `<td><input type="text" class="te-find-input" data-column="${colName}" placeholder="Search..." onkeydown="if(event.key==='Enter')TE.performFind()"></td>`;
+      });
+      html += '</tr>';
+    }
+    
+    thead.innerHTML = html;
+  }
+  
+  // Render table body
+  function renderBody() {
+    const tbody = document.getElementById('te-tbody');
+    const visibleCols = getVisibleColumns();
+    
+    if (state.records.length === 0 && !state.addingNew) {
+      tbody.innerHTML = `<tr><td colspan="${visibleCols.length + 1}" class="te-empty">No records found</td></tr>`;
+      return;
+    }
+    
+    let html = '';
+    
+    // New row (if adding)
+    if (state.addingNew) {
+      html += '<tr class="editing">';
+      html += `<td class="te-row-actions">
+        <button class="te-row-btn te-row-btn-save" onclick="TE.saveNewRecord()">Save</button>
+        <button class="te-row-btn te-row-btn-cancel" onclick="TE.cancelAdd()">Cancel</button>
+      </td>`;
+      
+      visibleCols.forEach(colName => {
+        const col = getColumnDef(colName);
+        const value = state.newRowData[colName] || '';
+        
+        if (col.generated) {
+          html += `<td class="te-cell-readonly">-</td>`;
+        } else {
+          const inputType = getInputType(col.type);
+          if (col.type === 'text') {
+            html += `<td><textarea class="te-cell-edit" data-column="${colName}" onchange="TE.updateNewRowData('${colName}', this.value)">${escapeHtml(value)}</textarea></td>`;
+          } else {
+            html += `<td><input type="${inputType}" class="te-cell-edit" data-column="${colName}" value="${escapeHtml(value)}" onchange="TE.updateNewRowData('${colName}', this.value)" ${col.primary ? 'required' : ''}></td>`;
+          }
+        }
+      });
+      html += '</tr>';
+    }
+    
+    // Existing rows
+    state.records.forEach((record, idx) => {
+      const isEditing = state.editingRow === record.wp_id;
+      html += `<tr class="${isEditing ? 'editing' : ''}">`;
+      
+      // Actions column
+      if (isEditing) {
+        html += `<td class="te-row-actions">
+          <button class="te-row-btn te-row-btn-save" onclick="TE.saveEdit('${escapeHtml(record.wp_id)}')">Save</button>
+          <button class="te-row-btn te-row-btn-cancel" onclick="TE.cancelEdit()">Cancel</button>
+        </td>`;
+      } else {
+        html += `<td class="te-row-actions">
+          <button class="te-row-btn te-row-btn-edit" onclick="TE.startEdit('${escapeHtml(record.wp_id)}')">Edit</button>
+          <button class="te-row-btn te-row-btn-delete" onclick="TE.promptDelete('${escapeHtml(record.wp_id)}')" ${state.destructiveEnabled ? '' : 'disabled'}>Delete</button>
+        </td>`;
+      }
+      
+      // Data columns
+      visibleCols.forEach(colName => {
+        const col = getColumnDef(colName);
+        const value = record[colName] ?? '';
+        
+        if (isEditing && col.editable && !col.primary) {
+          const editValue = state.editingData[colName] ?? value;
+          const inputType = getInputType(col.type);
+          
+          if (col.type === 'text') {
+            html += `<td><textarea class="te-cell-edit" data-column="${colName}" onchange="TE.updateEditData('${colName}', this.value)">${escapeHtml(editValue)}</textarea></td>`;
+          } else {
+            html += `<td><input type="${inputType}" class="te-cell-edit" data-column="${colName}" value="${escapeHtml(editValue)}" onchange="TE.updateEditData('${colName}', this.value)"></td>`;
+          }
+        } else {
+          let cellClass = '';
+          if (col.primary) cellClass = 'te-cell-primary';
+          else if (col.generated || !col.editable) cellClass = 'te-cell-readonly';
+          
+          html += `<td class="${cellClass}">${escapeHtml(value)}</td>`;
+        }
+      });
+      
+      html += '</tr>';
+    });
+    
+    tbody.innerHTML = html;
+  }
+  
+  // Render pagination
+  function renderPagination() {
+    const container = document.getElementById('te-pagination');
+    const start = (state.page - 1) * state.perPage + 1;
+    const end = Math.min(state.page * state.perPage, state.total);
+    
+    let html = `<div class="te-pagination-info">
+      Showing ${start}-${end} of ${state.total} records
+      ${state.searchMode ? '(filtered)' : ''}
+    </div>`;
+    
+    html += '<div class="te-pagination-controls">';
+    html += `<button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.goToPage(1)" ${state.page <= 1 ? 'disabled' : ''}>First</button>`;
+    html += `<button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.goToPage(${state.page - 1})" ${state.page <= 1 ? 'disabled' : ''}>Prev</button>`;
+    html += `<span style="padding: 0 10px;">Page ${state.page} of ${state.totalPages}</span>`;
+    html += `<button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.goToPage(${state.page + 1})" ${state.page >= state.totalPages ? 'disabled' : ''}>Next</button>`;
+    html += `<button class="te-btn te-btn-sm te-btn-secondary" onclick="TE.goToPage(${state.totalPages})" ${state.page >= state.totalPages ? 'disabled' : ''}>Last</button>`;
+    html += '</div>';
+    
+    container.innerHTML = html;
+  }
+  
+  // Main render function
+  function render() {
+    renderHeader();
+    renderBody();
+    renderPagination();
+    
+    // Update button states
+    document.getElementById('te-btn-show-all').style.display = state.searchMode ? 'inline-flex' : 'none';
+    document.getElementById('te-btn-find').textContent = state.findMode ? '❌ Cancel Find' : '🔍 Find';
+  }
+  
+  // Helper functions
+  function getInputType(colType) {
+    switch (colType) {
+      case 'int':
+      case 'tinyint': return 'number';
+      case 'date': return 'date';
+      case 'time': return 'time';
+      default: return 'text';
+    }
+  }
+  
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+  
+  // Column resize functionality
+  let resizeState = { active: false, column: null, startX: 0, startWidth: 0, th: null };
+  
+  function initResizeHandlers() {
+    const thead = document.getElementById('te-thead');
+    
+    thead.addEventListener('mousedown', function(e) {
+      const handle = e.target.closest('.resize-handle');
+      if (!handle) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const colName = handle.dataset.resizeCol;
+      const th = handle.closest('th');
+      
+      resizeState.active = true;
+      resizeState.column = colName;
+      resizeState.startX = e.pageX;
+      resizeState.startWidth = getColumnWidth(colName);
+      resizeState.th = th;
+      
+      th.classList.add('resizing');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      
+      document.addEventListener('mousemove', handleResize);
+      document.addEventListener('mouseup', stopResize);
+    });
+  }
+  
+  function handleResize(e) {
+    if (!resizeState.active) return;
+    
+    const diff = e.pageX - resizeState.startX;
+    const newWidth = Math.max(60, resizeState.startWidth + diff);
+    state.columnWidths[resizeState.column] = newWidth;
+    
+    // Update column width in DOM immediately for smooth feedback
+    if (resizeState.th) {
+      resizeState.th.style.width = newWidth + 'px';
+    }
+  }
+  
+  function stopResize() {
+    if (resizeState.active) {
+      resizeState.active = false;
+      if (resizeState.th) {
+        resizeState.th.classList.remove('resizing');
+      }
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      savePreferences();
+    }
+    resizeState.th = null;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+  
+  // Public API
+  window.TE = {
+    init: function() {
+      loadPreferences();
+      renderColumnToggles();
+      initResizeHandlers();
+      fetchRecords();
+    },
+    
+    refresh: function() {
+      if (state.searchMode) {
+        // Re-run the search
+        TE.performFind();
+      } else {
+        fetchRecords();
+      }
+    },
+    
+    toggleColumnControls: function() {
+      const el = document.getElementById('te-column-controls');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    },
+    
+    toggleColumn: function(colName) {
+      state.columnVisibility[colName] = !state.columnVisibility[colName];
+      savePreferences();
+      renderColumnToggles();
+      render();
+    },
+    
+    showAllColumns: function() {
+      COLUMNS.forEach(c => state.columnVisibility[c.name] = true);
+      savePreferences();
+      renderColumnToggles();
+      render();
+    },
+    
+    hideAllColumns: function() {
+      // Keep at least wp_id visible
+      COLUMNS.forEach(c => state.columnVisibility[c.name] = c.name === 'wp_id');
+      savePreferences();
+      renderColumnToggles();
+      render();
+    },
+    
+    resetColumns: function() {
+      state.columnOrder = COLUMNS.map(c => c.name);
+      state.columnVisibility = Object.fromEntries(COLUMNS.map(c => [c.name, true]));
+      state.columnWidths = {};
+      savePreferences();
+      renderColumnToggles();
+      render();
+    },
+    
+    toggleFindMode: function() {
+      state.findMode = !state.findMode;
+      if (!state.findMode && state.searchMode) {
+        // If canceling find while in search mode, stay in search mode
+      }
+      render();
+    },
+    
+    performFind: function() {
+      const inputs = document.querySelectorAll('.te-find-input');
+      const criteria = {};
+      
+      inputs.forEach(input => {
+        const val = input.value.trim();
+        if (val) {
+          criteria[input.dataset.column] = val;
+        }
+      });
+      
+      if (Object.keys(criteria).length === 0) {
+        showStatus('Enter at least one search criterion', 'warning');
+        return;
+      }
+      
+      state.page = 1;
+      searchRecords(criteria);
+    },
+    
+    showAllRecords: function() {
+      state.page = 1;
+      state.findMode = false;
+      fetchRecords();
+    },
+    
+    toggleDestructive: function() {
+      state.destructiveEnabled = document.getElementById('te-enable-destructive').checked;
+      document.getElementById('te-btn-add').disabled = !state.destructiveEnabled;
+      render();
+    },
+    
+    addNewRecord: function() {
+      if (!state.destructiveEnabled) return;
+      state.addingNew = true;
+      state.newRowData = {};
+      render();
+      // Focus first input
+      setTimeout(() => {
+        const firstInput = document.querySelector('tr.editing .te-cell-edit');
+        if (firstInput) firstInput.focus();
+      }, 50);
+    },
+    
+    updateNewRowData: function(colName, value) {
+      state.newRowData[colName] = value;
+    },
+    
+    saveNewRecord: function() {
+      if (!state.newRowData.wp_id) {
+        showStatus('wp_id is required', 'error');
+        return;
+      }
+      createRecord(state.newRowData);
+    },
+    
+    cancelAdd: function() {
+      state.addingNew = false;
+      state.newRowData = {};
+      render();
+    },
+    
+    startEdit: function(wpId) {
+      const record = state.records.find(r => r.wp_id === wpId);
+      if (!record) return;
+      
+      state.editingRow = wpId;
+      state.editingData = { ...record };
+      render();
+    },
+    
+    updateEditData: function(colName, value) {
+      state.editingData[colName] = value;
+    },
+    
+    saveEdit: function(wpId) {
+      updateRecord(wpId, state.editingData);
+    },
+    
+    cancelEdit: function() {
+      state.editingRow = null;
+      state.editingData = {};
+      render();
+    },
+    
+    promptDelete: function(wpId) {
+      if (!state.destructiveEnabled) return;
+      state.deleteTarget = wpId;
+      document.getElementById('te-delete-id').textContent = wpId;
+      document.getElementById('te-delete-modal').classList.add('visible');
+    },
+    
+    closeDeleteModal: function() {
+      state.deleteTarget = null;
+      document.getElementById('te-delete-modal').classList.remove('visible');
+    },
+    
+    confirmDelete: function() {
+      if (state.deleteTarget) {
+        deleteRecord(state.deleteTarget);
+        TE.closeDeleteModal();
+      }
+    },
+    
+    goToPage: function(page) {
+      if (page < 1 || page > state.totalPages) return;
+      state.page = page;
+      
+      if (state.searchMode) {
+        TE.performFind();
+      } else {
+        fetchRecords();
+      }
+    },
+  };
+  
+  // Initialize on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', TE.init);
+  } else {
+    TE.init();
+  }
+})();
+</script>
+
