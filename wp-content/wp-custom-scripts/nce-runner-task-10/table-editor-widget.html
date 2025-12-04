@@ -18,7 +18,7 @@
       margin-bottom: 16px;
       flex-wrap: wrap;
       gap: 12px;
-    }
+    } 
     
     #te-widget h2 {
       margin: 0;
@@ -211,9 +211,11 @@
     
     /* Table */
     #te-widget table {
-      width: 100%;
       border-collapse: collapse;
       font-size: 0.85rem;
+      table-layout: fixed;
+      min-width: 100%;
+      width: max-content;
     }
     
     #te-widget thead {
