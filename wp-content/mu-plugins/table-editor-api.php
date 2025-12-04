@@ -3,7 +3,7 @@
  * Plugin Name: Product Eligibility Table Editor API
  * Description: REST API endpoints for CRUD operations on wp_zoho_product_eligibility table
  * Version: 1.0.0
- */
+ */ 
 
 if (!defined('ABSPATH')) exit;
 
@@ -56,6 +56,36 @@ add_action('rest_api_init', function() {
     register_rest_route($namespace, '/columns', [
         'methods' => 'GET',
         'callback' => 'te_get_columns',
+        'permission_callback' => 'te_check_permission',
+    ]);
+    
+    // === SAVED VIEWS ENDPOINTS ===
+    
+    // Get all saved views
+    register_rest_route($namespace, '/views', [
+        'methods' => 'GET',
+        'callback' => 'te_get_views',
+        'permission_callback' => 'te_check_permission',
+    ]);
+    
+    // Save a new view
+    register_rest_route($namespace, '/views', [
+        'methods' => 'POST',
+        'callback' => 'te_save_view',
+        'permission_callback' => 'te_check_permission',
+    ]);
+    
+    // Delete a view
+    register_rest_route($namespace, '/views/(?P<id>\d+)', [
+        'methods' => 'DELETE',
+        'callback' => 'te_delete_view',
+        'permission_callback' => 'te_check_permission',
+    ]);
+    
+    // Get lookup options for a column
+    register_rest_route($namespace, '/lookup/(?P<table>[a-zA-Z0-9_]+)', [
+        'methods' => 'GET',
+        'callback' => 'te_get_lookup_options',
         'permission_callback' => 'te_check_permission',
     ]);
 });
@@ -457,6 +487,215 @@ function te_get_format($type) {
         default:
             return '%s';
     }
+}
+
+// ============================================
+// SAVED VIEWS FUNCTIONS
+// ============================================
+
+/**
+ * Views table name
+ */
+function te_views_table() {
+    global $wpdb;
+    return $wpdb->prefix . 'zoho_table_editors';
+}
+
+/**
+ * Get all saved views
+ */
+function te_get_views() {
+    global $wpdb;
+    $table = te_views_table();
+    
+    $views = $wpdb->get_results(
+        "SELECT id, view_name, prefs, column_prefs, created_by, created_at FROM `{$table}` ORDER BY view_name ASC",
+        ARRAY_A
+    );
+    
+    if ($wpdb->last_error) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Database error: ' . $wpdb->last_error,
+        ], 500);
+    }
+    
+    // Decode JSON fields
+    foreach ($views as &$view) {
+        $view['prefs'] = json_decode($view['prefs'], true);
+        $view['column_prefs'] = json_decode($view['column_prefs'], true);
+    }
+    
+    return new WP_REST_Response([
+        'success' => true,
+        'views' => $views,
+    ], 200);
+}
+
+/**
+ * Save a new view
+ */
+function te_save_view(WP_REST_Request $request) {
+    global $wpdb;
+    $table = te_views_table();
+    
+    $data = $request->get_json_params();
+    
+    $view_name = sanitize_text_field($data['view_name'] ?? '');
+    $prefs = $data['prefs'] ?? [];
+    
+    if (empty($view_name)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'View name is required',
+        ], 400);
+    }
+    
+    // Get current user
+    $current_user = wp_get_current_user();
+    $created_by = $current_user->display_name ?: $current_user->user_login;
+    
+    // Check if view name already exists
+    $exists = $wpdb->get_var(
+        $wpdb->prepare("SELECT id FROM `{$table}` WHERE view_name = %s", $view_name)
+    );
+    
+    if ($exists) {
+        // Update existing view
+        $result = $wpdb->update(
+            $table,
+            [
+                'prefs' => json_encode($prefs),
+                'created_by' => $created_by,
+            ],
+            ['id' => $exists],
+            ['%s', '%s'],
+            ['%d']
+        );
+        
+        if ($result === false) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Failed to update view: ' . $wpdb->last_error,
+            ], 500);
+        }
+        
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => 'View updated successfully',
+            'id' => intval($exists),
+        ], 200);
+    } else {
+        // Insert new view
+        $result = $wpdb->insert(
+            $table,
+            [
+                'view_name' => $view_name,
+                'prefs' => json_encode($prefs),
+                'created_by' => $created_by,
+            ],
+            ['%s', '%s', '%s']
+        );
+        
+        if ($result === false) {
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => 'Failed to save view: ' . $wpdb->last_error,
+            ], 500);
+        }
+        
+        return new WP_REST_Response([
+            'success' => true,
+            'message' => 'View saved successfully',
+            'id' => $wpdb->insert_id,
+        ], 201);
+    }
+}
+
+/**
+ * Delete a view
+ */
+function te_delete_view(WP_REST_Request $request) {
+    global $wpdb;
+    $table = te_views_table();
+    $id = intval($request->get_param('id'));
+    
+    if ($id <= 0) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Invalid view ID',
+        ], 400);
+    }
+    
+    $result = $wpdb->delete($table, ['id' => $id], ['%d']);
+    
+    if ($result === false) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Failed to delete view: ' . $wpdb->last_error,
+        ], 500);
+    }
+    
+    if ($result === 0) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'View not found',
+        ], 404);
+    }
+    
+    return new WP_REST_Response([
+        'success' => true,
+        'message' => 'View deleted successfully',
+    ], 200);
+}
+
+/**
+ * Get lookup options from a related table
+ */
+function te_get_lookup_options(WP_REST_Request $request) {
+    global $wpdb;
+    
+    $table_name = $request->get_param('table');
+    $value_field = sanitize_key($request->get_param('value_field') ?: 'id');
+    $display_field = sanitize_key($request->get_param('display_field') ?: 'name');
+    $order_by = sanitize_key($request->get_param('order_by') ?: $display_field);
+    $order = strtoupper($request->get_param('order')) === 'DESC' ? 'DESC' : 'ASC';
+    
+    // Validate table name (must start with wp_ prefix for security)
+    if (!preg_match('/^wp_[a-zA-Z0-9_]+$/', $table_name)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Invalid table name',
+        ], 400);
+    }
+    
+    // Check if table exists
+    $table_exists = $wpdb->get_var(
+        $wpdb->prepare("SHOW TABLES LIKE %s", $table_name)
+    );
+    
+    if (!$table_exists) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Table not found: ' . $table_name,
+        ], 404);
+    }
+    
+    // Fetch options
+    $sql = "SELECT `{$value_field}` as value, `{$display_field}` as label FROM `{$table_name}` ORDER BY `{$order_by}` {$order}";
+    $options = $wpdb->get_results($sql, ARRAY_A);
+    
+    if ($wpdb->last_error) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Database error: ' . $wpdb->last_error,
+        ], 500);
+    }
+    
+    return new WP_REST_Response([
+        'success' => true,
+        'options' => $options,
+    ], 200);
 }
 
 // Add shortcode for the widget
