@@ -1,4 +1,4 @@
-<?php // v1.5.0 - 2025-11-27 21:10
+<?php // v1.6.0 - 2025-12-11
 declare(strict_types=1);
 
 /**
@@ -9,12 +9,15 @@ declare(strict_types=1);
  * - Batches up to 10,000 profiles per request
  * - Creates/updates profiles with identifiers, names, and location
  * - Updates last_run_datetime on success
+ * - Can filter to only new/changed profiles within a lookback window
  * 
  * Note: Marketing consent cannot be set via bulk import API.
  * Use subscription endpoints or list management separately if needed.
  * 
  * @param array $params Parameters from REST request:
  *                      - job_name (optional): defaults to 'profiles'
+ *                      - lookback_hours (optional): only sync profiles updated/created within this window (default: 14)
+ *                      - no_lookback (optional): if true, syncs ALL profiles regardless of timestamps
  * @return array Summary with sync results   
  */
 if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
@@ -25,12 +28,17 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         @set_time_limit(1800);
         
         $jobName = isset($params['job_name']) ? trim((string)$params['job_name']) : 'profiles';
+        $lookbackHours = isset($params['lookback_hours']) ? (int)$params['lookback_hours'] : 14;
+        $noLookback = !empty($params['no_lookback']); // If true, sync ALL profiles
+        $skipLogClear = !empty($params['skip_log_clear']); // Don't clear log when called from full sync
         
-        error_log("nce_task_upsert_klaviyo_profiles: Starting sync (Job: {$jobName})");
+        error_log("nce_task_upsert_klaviyo_profiles: Starting sync (Job: {$jobName}, Lookback: " . ($noLookback ? 'disabled' : "{$lookbackHours}h") . ")");
         
-        // Initialize temp log file
+        // Initialize temp log file (only clear if not called from full sync)
         $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
+        if (!$skipLogClear) {
+            file_put_contents($temp_log, ""); // Clear the file
+        }
         file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UPSERT PROFILES - Job: {$jobName}\n", FILE_APPEND);
         
         global $wpdb;
@@ -53,6 +61,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         $apiKey = trim((string)($g['api_key'] ?? ''));
         $apiVersion = trim((string)($g['api_version'] ?? '2025-10-15'));
         $queryString = trim((string)($g['query'] ?? ''));
+        $onlyRunIf = trim((string)($g['only_run_if'] ?? ''));
         $globalsId = (int)$g['id'];
         
         if ($apiKey === '') {
@@ -64,13 +73,80 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         }
         
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
         
-        // --- 2. Validate query with LIMIT 3 ---
+        // --- Pre-check: only_run_if query ---
+        if ($onlyRunIf !== '') {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Checking only_run_if condition...\n", FILE_APPEND);
+            error_log("nce_task_upsert_klaviyo_profiles: Executing only_run_if check");
+            
+            // Replace {{column_name}} placeholders with values from globals row
+            $processedQuery = $onlyRunIf;
+            $hasNullPlaceholder = false;
+            
+            // Find all {{placeholder}} patterns
+            if (preg_match_all('/\{\{(\w+)\}\}/', $onlyRunIf, $matches)) {
+                foreach ($matches[1] as $columnName) {
+                    $placeholder = '{{' . $columnName . '}}';
+                    $value = $g[$columnName] ?? null;
+                    
+                    if ($value === null || $value === '') {
+                        $hasNullPlaceholder = true;
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Placeholder {$placeholder} is null/empty - will run job\n", FILE_APPEND);
+                        error_log("nce_task_upsert_klaviyo_profiles: Placeholder {$placeholder} is null/empty");
+                        break;
+                    }
+                    
+                    // Escape and quote the value for SQL
+                    $escapedValue = "'" . esc_sql($value) . "'";
+                    $processedQuery = str_replace($placeholder, $escapedValue, $processedQuery);
+                }
+            }
+            
+            // If any placeholder was null/empty, run the job (e.g., first run)
+            if ($hasNullPlaceholder) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Running job (placeholder value missing - likely first run)\n", FILE_APPEND);
+            } else {
+                // Execute the check query
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Processed query: " . substr($processedQuery, 0, 200) . "\n", FILE_APPEND);
+                $checkResult = $wpdb->get_var($processedQuery);
+                
+                if ($wpdb->last_error) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway\n", FILE_APPEND);
+                    error_log("nce_task_upsert_klaviyo_profiles: only_run_if query error (running anyway): " . $wpdb->last_error);
+                    // Continue anyway if the check query fails (fail-safe)
+                } elseif (empty($checkResult)) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process\n", FILE_APPEND);
+                    error_log("nce_task_upsert_klaviyo_profiles: Skipping - only_run_if returned empty");
+                    return [
+                        'success' => true,
+                        'skipped' => true,
+                        'message' => 'Skipped: only_run_if condition not met (no updates detected)',
+                        'job_name' => $jobName,
+                        'only_run_if_query' => $processedQuery
+                    ];
+                } else {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult})\n", FILE_APPEND);
+                    error_log("nce_task_upsert_klaviyo_profiles: only_run_if check passed");
+                }
+            }
+        }
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback: " . ($noLookback ? 'disabled (sync ALL)' : "{$lookbackHours} hours") . "\n", FILE_APPEND);
+        
+        // --- 2. Apply lookback filter if enabled ---
+        if (!$noLookback && $lookbackHours > 0) {
+            $cutoffTime = date('Y-m-d H:i:s', strtotime("-{$lookbackHours} hours"));
+            $queryString = nce_add_time_filter_to_query($queryString, $cutoffTime);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Filtering: only profiles updated/created after {$cutoffTime}\n", FILE_APPEND);
+        }
+        
+        // --- 3. Validate query with LIMIT 3 ---
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Validating query structure...\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Final query: " . substr($queryString, 0, 200) . "...\n", FILE_APPEND);
         error_log("nce_task_upsert_klaviyo_profiles: Validating query with LIMIT 3");
         
         // Add LIMIT 3 to query for validation
+        error_log('nce_task_upsert_klaviyo_profiles: Raw query string: ' . json_encode($queryString));
         $validationQuery = rtrim($queryString, "; \t\n\r\0\x0B") . " LIMIT 3";
         $testRows = $wpdb->get_results($validationQuery, ARRAY_A);
         
@@ -92,7 +168,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 'job_name' => $jobName,
                 'synced' => 0
             ];
-        }
+        } 
         
         // Define valid Klaviyo profile columns
         $validColumns = [
@@ -148,7 +224,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         
         error_log("nce_task_upsert_klaviyo_profiles: Validation passed, proceeding with full sync");
         
-        // --- 3. Fetch all profiles ---
+        // --- 4. Fetch all profiles ---
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching all profiles...\n", FILE_APPEND);
         
         $allProfiles = $wpdb->get_results($queryString, ARRAY_A);
@@ -164,6 +240,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         
         $totalProfiles = count($allProfiles);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalProfiles} profiles to sync\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG: Query returned {$totalProfiles} rows for job '{$jobName}'\n", FILE_APPEND);
         error_log("nce_task_upsert_klaviyo_profiles: Found {$totalProfiles} profiles");
         
         if ($totalProfiles === 0) {
@@ -175,7 +252,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             ];
         }
         
-        // --- 4. Batch profiles and send to Klaviyo ---
+        // --- 5. Batch profiles and send to Klaviyo ---
         $batchSize = 10000; // Klaviyo limit
         $batches = array_chunk($allProfiles, $batchSize);
         $totalBatches = count($batches);
@@ -197,7 +274,8 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             $profilesData = [];
             $batchSkipped = 0;
             foreach ($batchProfiles as $profile) {
-                $profileData = nce_build_klaviyo_profile($profile, $usableColumns);
+                $debugReason = null;
+                $profileData = nce_build_klaviyo_profile($profile, $usableColumns, $debugReason);
                 if ($profileData !== null) {
                     $profilesData[] = $profileData;
                 } else {
@@ -302,12 +380,12 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             }
         }
         
-        // --- 5. Update last_run_datetime if successful ---
+        // --- 6. Update last_run_datetime if successful ---
         $endTime = microtime(true);
         $duration = round($endTime - $startTime, 2);
         
         if ($failedBatches === 0) {
-            $now = current_time('mysql');
+            $now = current_time('mysql', true);
             $wpdb->update(
                 $table,
                 ['last_run_datetime' => $now],
@@ -319,7 +397,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             error_log("nce_task_upsert_klaviyo_profiles: Updated last_run_datetime");
         }
         
-        // --- 6. Summary ---
+        // --- 7. Summary ---
         $completionMsg = "[" . date('H:i:s') . "] --- SYNC COMPLETE ---\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total profiles found: {$totalProfiles}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Skipped (invalid): {$skippedProfiles}\n";
@@ -335,6 +413,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             'success' => true,
             'message' => 'Profile sync completed',
             'job_name' => $jobName,
+            'lookback_hours' => $noLookback ? null : $lookbackHours,
             'total_found' => $totalProfiles,
             'skipped_invalid' => $skippedProfiles,
             'synced' => $syncedProfiles,
@@ -356,14 +435,15 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
  * 
  * @param array $profile Database row
  * @param array $usableColumns List of valid Klaviyo column names to use
+ * @param string|null $reason Populated with validation reason when skipped
  * @return array|null Profile payload or null if invalid
  */
 if (!function_exists('nce_build_klaviyo_profile')) {
-    function nce_build_klaviyo_profile(array $profile, array $usableColumns): ?array {
+    function nce_build_klaviyo_profile(array $profile, array $usableColumns, ?string &$reason = null): ?array {
         // Must have at least one identifier
         // Clean and normalize email
         $email = !empty($profile['email']) ? strtolower(trim($profile['email'])) : null;
-        $phone = !empty($profile['phone_number']) ? trim($profile['phone_number']) : null;
+        $phone = !empty($profile['phone_number']) ? trim((string)$profile['phone_number']) : null;
         $externalId = !empty($profile['external_id']) ? trim($profile['external_id']) : null;
         
         // Validate email if present (Klaviyo has strict requirements)
@@ -371,30 +451,35 @@ if (!function_exists('nce_build_klaviyo_profile')) {
             // 0. Check for placeholder/null values
             $invalidPatterns = ['null', 'none', 'n/a', 'na', 'test', '(null)', 'undefined', 'email'];
             if (in_array($email, $invalidPatterns) || strlen($email) < 3) {
+                $reason = "placeholder email: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping placeholder email: {$email}");
                 return null;
-            }
+            } 
             
             // 1. Basic format check
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $reason = "invalid email format: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping invalid email format: {$email}");
                 return null;
             }
             
             // 2. Must have @ and domain with TLD
             if (!preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $email)) {
+                $reason = "email missing valid domain: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping email (no valid domain): {$email}");
                 return null;
             }
             
             // 3. TLD must be at least 2 characters (e.g., .com not .c)
             if (!preg_match('/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/', $email)) {
+                $reason = "email invalid TLD: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping email (invalid TLD): {$email}");
                 return null;
             }
             
             // 4. No spaces or special invalid characters
             if (preg_match('/[\s\(\)\[\]\{\}<>]/', $email)) {
+                $reason = "email invalid characters: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping email (invalid characters): {$email}");
                 return null;
             }
@@ -403,12 +488,14 @@ if (!function_exists('nce_build_klaviyo_profile')) {
             $fakeDomains = ['test.com', 'example.com', 'localhost', 'test', 'none', 'null', 'n/a'];
             $domain = strtolower(substr(strrchr($email, '@'), 1));
             if (in_array($domain, $fakeDomains) || empty($domain)) {
+                $reason = "email fake/empty domain: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping email (fake/empty domain): {$email}");
                 return null;
             }
             
             // 6. Email must not be longer than 254 characters (RFC limit)
             if (strlen($email) > 254) {
+                $reason = "email too long: {$email}";
                 error_log("nce_build_klaviyo_profile: Skipping email (too long): {$email}");
                 return null;
             }
@@ -416,11 +503,13 @@ if (!function_exists('nce_build_klaviyo_profile')) {
         
         // Validate phone if present (must start with +)
         if ($phone && !preg_match('/^\+\d{10,15}$/', $phone)) {
+            $reason = "invalid phone: {$phone}";
             error_log("nce_build_klaviyo_profile: Skipping invalid phone: {$phone}");
             return null; // Skip profiles with invalid phone
         }
         
         if (empty($email) && empty($phone) && empty($externalId)) {
+            $reason = 'no identifiers present';
             return null; // Skip profiles without any identifier
         }
         
@@ -463,6 +552,7 @@ if (!function_exists('nce_build_klaviyo_profile')) {
         // Marketing consent must be managed separately via subscription endpoints
         
         // Return profile payload
+        $reason = 'valid';
         return [
             'type' => 'profile',
             'attributes' => $attributes
@@ -528,6 +618,60 @@ if (!function_exists('nce_klaviyo_bulk_request')) {
             'error'    => $errorMsg,
             'raw_body' => $rawBody, // For full debugging
         ];
+    }
+}
+
+/**
+ * Add time filter to SQL query for lookback window
+ * 
+ * Tries to filter by updated_at first, falls back to created_at.
+ * Handles queries with or without existing WHERE clause.
+ * 
+ * @param string $query Original SQL query
+ * @param string $cutoffTime Datetime string (Y-m-d H:i:s)
+ * @return string Modified query with time filter
+ */
+if (!function_exists('nce_add_time_filter_to_query')) {
+    function nce_add_time_filter_to_query(string $query, string $cutoffTime): string {
+        // Remove trailing semicolon and whitespace
+        $query = rtrim($query, "; \t\n\r\0\x0B");
+        
+        // Build the time condition - try updated_at first, then created_at
+        // Using COALESCE to handle cases where updated_at might be NULL
+        $timeCondition = "(COALESCE(updated_at, created_at) >= '{$cutoffTime}' OR created_at >= '{$cutoffTime}')";
+        
+        // Check if query already has WHERE clause (case-insensitive)
+        $queryLower = strtolower($query);
+        
+        if (strpos($queryLower, ' where ') !== false) {
+            // Has WHERE - find the position and add AND condition
+            // We need to be careful about WHERE inside subqueries
+            // Simple approach: find last WHERE that's not in a subquery
+            $lastWhere = strripos($query, ' WHERE ');
+            
+            if ($lastWhere !== false) {
+                // Insert the time condition right after WHERE
+                $beforeWhere = substr($query, 0, $lastWhere + 7); // Include " WHERE "
+                $afterWhere = substr($query, $lastWhere + 7);
+                $query = $beforeWhere . $timeCondition . ' AND ' . $afterWhere;
+            }
+        } else {
+            // No WHERE clause - add one before any ORDER BY, GROUP BY, or LIMIT
+            $insertPos = strlen($query);
+            
+            foreach ([' ORDER BY', ' GROUP BY', ' LIMIT', ' HAVING'] as $clause) {
+                $pos = stripos($query, $clause);
+                if ($pos !== false && $pos < $insertPos) {
+                    $insertPos = $pos;
+                }
+            }
+            
+            $beforeInsert = substr($query, 0, $insertPos);
+            $afterInsert = substr($query, $insertPos);
+            $query = $beforeInsert . ' WHERE ' . $timeCondition . $afterInsert;
+        }
+        
+        return $query;
     }
 }
 

@@ -2,20 +2,20 @@
 declare(strict_types=1);
 
 /**
- * Klaviyo Upload Task - OPTIMIZED VERSION
+ * Klaviyo Upload Task - OPTIMIZED VERSION 12-2-25 
  * 
  * Optimizations over original version:
  * - No delays between batches (unless rate limited)
  * - Only retries on HTTP 429 (rate limit)
  * - Better rate limit monitoring
  * - Less frequent database logging (every 10 batches vs every batch)
- * - Supports larger batch sizes (default 1000, max 10000)
+ * - Fixed 450-record batches for stable throughput
  * - Enhanced statistics and performance metrics
  * - Auto-creates data source if not present
  * 
  * @param array $params Parameters from REST request:
  *                      - job_name (required): Used to look up configuration in wp_klaviyo_globals WHERE job_name = $job_name
- *                                            If not provided, defaults to 'default'
+ *                                             If not provided, defaults to 'default'
  *                                            If data source ID is missing, automatically creates one
  * @return array Summary with progress or error details
  */
@@ -28,12 +28,15 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         
         // Extract job_name parameter
         $jobName = isset($params['job_name']) ? trim((string)$params['job_name']) : 'default';
+        $skipLogClear = !empty($params['skip_log_clear']); // Don't clear log when called from full sync
         
         error_log("klaviyo_write_objects_optimized: Function started. Job: {$jobName}, Memory limit: " . ini_get('memory_limit'));
         
-        // Initialize temp log file
+        // Initialize temp log file (only clear if not called from full sync)
         $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
+        if (!$skipLogClear) {
+            file_put_contents($temp_log, ""); // Clear the file
+        }
         file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] JOB STARTED (OPTIMIZED VERSION) - Job: {$jobName}\n", FILE_APPEND);
         
         global $wpdb;
@@ -60,39 +63,87 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         $apiKey         = trim((string)($g['api_key'] ?? ''));
         $apiVersion     = trim((string)($g['api_version'] ?? '2025-10-15'));
         $dsId           = trim((string)($g['object_ds_id'] ?? ''));
-        $objectQuery1   = trim((string)($g['object_query'] ?? ''));
-        $objectQuery2   = trim((string)($g['object_query_2'] ?? ''));
-        $objectQuery3   = trim((string)($g['object_query_3'] ?? ''));
-        $batchSize      = isset($g['batch_size']) && $g['batch_size'] !== null ? (int)$g['batch_size'] : 1000; // INCREASED from 450
+        $dsName         = trim((string)($g['object_ds_name'] ?? '')); 
+        $queryString    = trim((string)($g['query'] ?? ''));
+        $onlyRunIf      = trim((string)($g['only_run_if'] ?? ''));
+        $batchSize      = 450;
         $batchLimit     = isset($g['batch_limit']) && $g['batch_limit'] !== null ? (int)$g['batch_limit'] : 0;
         $startingOffset = isset($g['starting_offset']) && $g['starting_offset'] !== null ? (int)$g['starting_offset'] : 0;
-        $queryToUse     = isset($g['query_to_use']) && $g['query_to_use'] !== null ? (int)$g['query_to_use'] : 1;
         $controlParam2  = trim((string)($g['control_param_2'] ?? ''));
         $globalsId      = (int)$g['id'];
-        
-        // Select which query to use based on query_to_use field
-        $baseSql = '';
-        $queryName = '';
-        switch ($queryToUse) {
-            case 2:
-                $baseSql = $objectQuery2;
-                $queryName = 'object_query_2';
-                break;
-            case 3:
-                $baseSql = $objectQuery3;
-                $queryName = 'object_query_3';
-                break;
-            case 1:
-            default:
-                $baseSql = $objectQuery1;
-                $queryName = 'object_query';
-                break;
-        }
+        $baseSql        = $queryString;
+        $queryName      = 'query';
+        $createdDataSource = null;
         
         $endpoint = 'https://a.klaviyo.com/api/data-source-record-bulk-create-jobs';
+        
+        // --- Pre-check: only_run_if query ---
+        if ($onlyRunIf !== '') {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Checking only_run_if condition...\n", FILE_APPEND);
+            error_log("klaviyo_write_objects_optimized: Executing only_run_if check for job: {$jobName}");
+            
+            // Replace {{column_name}} placeholders with values from globals row
+            $processedQuery = $onlyRunIf;
+            $hasNullPlaceholder = false;
+            
+            // Find all {{placeholder}} patterns
+            if (preg_match_all('/\{\{(\w+)\}\}/', $onlyRunIf, $matches)) {
+                foreach ($matches[1] as $columnName) {
+                    $placeholder = '{{' . $columnName . '}}';
+                    $value = $g[$columnName] ?? null;
+                    
+                    if ($value === null || $value === '') {
+                        $hasNullPlaceholder = true;
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Placeholder {$placeholder} is null/empty - will run job\n", FILE_APPEND);
+                        error_log("klaviyo_write_objects_optimized: Placeholder {$placeholder} is null/empty for job: {$jobName}");
+                        break;
+                    }
+                    
+                    // Escape and quote the value for SQL
+                    $escapedValue = "'" . esc_sql($value) . "'";
+                    $processedQuery = str_replace($placeholder, $escapedValue, $processedQuery);
+                }
+            }
+            
+            // If any placeholder was null/empty, run the job (e.g., first run)
+            if ($hasNullPlaceholder) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Running job (placeholder value missing - likely first run)\n", FILE_APPEND);
+            } else {
+                // Execute the check query
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Processed query: " . substr($processedQuery, 0, 200) . "\n", FILE_APPEND);
+                $checkResult = $wpdb->get_var($processedQuery);
+                
+                if ($wpdb->last_error) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway\n", FILE_APPEND);
+                    error_log("klaviyo_write_objects_optimized: only_run_if query error (running anyway): " . $wpdb->last_error);
+                    // Continue anyway if the check query fails (fail-safe)
+                } elseif (empty($checkResult)) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process\n", FILE_APPEND);
+                    error_log("klaviyo_write_objects_optimized: Skipping job {$jobName} - only_run_if returned empty");
+                    return [
+                        'success' => true,
+                        'skipped' => true,
+                        'message' => 'Skipped: only_run_if condition not met (no updates detected)',
+                        'job_name' => $jobName,
+                        'only_run_if_query' => $processedQuery
+                    ];
+                } else {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult})\n", FILE_APPEND);
+                    error_log("klaviyo_write_objects_optimized: only_run_if check passed for job: {$jobName}");
+                }
+            }
+        }
 
         // Clear previous result and first_batch_payload before starting new run
         // $table already defined above
+        $jobStartTime = current_time('mysql', true);
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET last_run_datetime = %s WHERE id = %d",
+            $jobStartTime,
+            $globalsId
+        ));
+        $wpdb->query('COMMIT');
+        error_log("klaviyo_write_objects_optimized: Set last_run_datetime={$jobStartTime} for job {$jobName}");
         $affected = $wpdb->query($wpdb->prepare(
             "UPDATE {$table} SET last_result = %s, first_batch_payload = NULL WHERE id = %d",
             "Optimized cron job has started\n",
@@ -129,15 +180,45 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             
             // Data source created successfully, use the new ID
             $dsId = $dsResult['object_ds_id'];
-            $dsName = $dsResult['object_ds_name'];
+            $dsName = $dsResult['object_ds_name'] ?? '';
+            $createdDataSource = [
+                'id' => $dsId,
+                'name' => $dsName,
+                'created_at' => current_time('mysql'),
+            ];
             error_log("klaviyo_write_objects_optimized: Created new data source: {$dsName} (ID: {$dsId})");
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Created data source: {$dsName} (ID: {$dsId})\n", FILE_APPEND);
             
-            // Note: The data source ID is already saved to the database by nce_create_klaviyo_data_source_from_db
+            // Ensure globals row stores the new data source details
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$table} SET object_ds_id = %s, object_ds_name = %s WHERE id = %d",
+                $dsId,
+                $dsName,
+                $globalsId
+            ));
+            $wpdb->query('COMMIT');
+        }
+        
+        // If a data source already exists but has a name, append job name for clarity
+        if ($dsId !== '' && $dsName !== '' && stripos($dsName, $jobName) === false) {
+            $newDsName = "{$dsName} ({$jobName})";
+            $updateName = nce_update_klaviyo_data_source_name($dsId, $newDsName, $apiKey, $apiVersion);
+            if (empty($updateName['error'])) {
+                $dsName = $newDsName;
+                $wpdb->query($wpdb->prepare(
+                    "UPDATE {$table} SET object_ds_name = %s WHERE id = %d",
+                    $dsName,
+                    $globalsId
+                ));
+                $wpdb->query('COMMIT');
+                error_log("klaviyo_write_objects_optimized: Appended job name to existing data source ({$dsName})");
+            } else {
+                error_log("klaviyo_write_objects_optimized: Failed to update data source name: " . $updateName['error']);
+            }
         }
         
         if ($baseSql === '') {
-            return nce_finish_and_log(['error' => "Missing {$queryName} (query_to_use={$queryToUse})"], $globalsId);
+            return nce_finish_and_log(['error' => 'Missing query (configure wp_klaviyo_globals.query for this job)'], $globalsId);
         }
         if ($batchSize < 1 || $batchSize > 10000) { // INCREASED max from 1000 to 10000
             return nce_finish_and_log(['error' => 'batch_size must be between 1 and 10000'], $globalsId);
@@ -166,13 +247,9 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         // Log configuration
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded for job: {$jobName}\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch size: {$batchSize} records per batch\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch limit: " . ($batchLimit > 0 ? $batchLimit : '0 (no limit)') . "\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Starting offset: {$startingOffset}\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] OPTIMIZATION: No delays between batches (async processing)\n", FILE_APPEND);
-        if ($startingOffset > 0) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Using starting_offset: {$startingOffset}\n", FILE_APPEND);
-        }
-        if ($queryToUse > 1) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Using query: {$queryName} (query_to_use={$queryToUse})\n", FILE_APPEND);
-        }
         
         // --- 5. Main batch loop ---
         $startTime = microtime(true);
@@ -293,7 +370,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 
                 // Other error - stop immediately (don't retry)
                 break;
-            }
+            } 
             
             $batches++;
             
@@ -402,6 +479,10 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         $completionMsg .= "[" . date('H:i:s') . "] Rate limit hits: {$rateLimitHits}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total retries: {$totalRetries}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Final rate limit: {$rateLimitInfo['remaining']}/{$rateLimitInfo['limit']}\n";
+        if ($dsId !== '') {
+            $dsLine = $createdDataSource ? "Data source: {$dsName} ({$dsId}) [CREATED THIS RUN]" : "Data source: {$dsName} ({$dsId})";
+            $completionMsg .= "[" . date('H:i:s') . "] {$dsLine}\n";
+        }
         
         file_put_contents($temp_log, $completionMsg, FILE_APPEND);
         
@@ -412,10 +493,17 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         ));
         $wpdb->query('COMMIT');
         
+        $dataSourceInfo = [
+            'id' => $dsId,
+            'name' => $dsName,
+            'created_this_run' => $createdDataSource !== null,
+        ];
         return [
             'success' => true, 
             'message' => 'Job completed - see last_result field for details',
             'job_name' => $jobName,
+            'query' => $baseSql,
+            'data_source' => $dataSourceInfo,
             'stats' => [
                 'batches' => $batches,
                 'uploaded' => $uploaded,
@@ -425,6 +513,124 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 'total_retries' => $totalRetries,
             ]
         ];
+    }
+}
+
+/* ============================================================
+ * Helper Functions (shared with legacy Task 1 runner)
+ * ============================================================ */
+
+if (!function_exists('nce_build_paged_sql')) {
+    function nce_build_paged_sql(string $baseSql, int $limit, int $offset): string {
+        $trimmed = rtrim($baseSql);
+        $trimmed = rtrim($trimmed, "; \t\n\r\0\x0B");
+        return $trimmed . " LIMIT {$limit} OFFSET {$offset}";
+    }
+}
+
+if (!function_exists('nce_klaviyo_request')) {
+    function nce_klaviyo_request(string $method, string $url, string $apiKey, string $apiVersion, array $payload = []): array {
+        $args = [
+            'method'  => strtoupper($method),
+            'headers' => [
+                'Authorization' => "Klaviyo-API-Key {$apiKey}",
+                'Content-Type'  => 'application/json',
+                'Accept'        => 'application/json',
+                'revision'      => $apiVersion,
+            ],
+            'timeout' => 30,
+        ];
+        
+        if (!empty($payload)) {
+            $args['body'] = wp_json_encode($payload);
+        }
+        
+        $res  = wp_remote_request($url, $args);
+        $http = is_wp_error($res) ? 0 : (int) wp_remote_retrieve_response_code($res);
+        $body = is_wp_error($res) ? ['error' => $res->get_error_message()] : json_decode(wp_remote_retrieve_body($res), true);
+        $headers = is_wp_error($res) ? [] : wp_remote_retrieve_headers($res);
+        
+        $retryAfter = null;
+        $rateLimit = null;
+        $rateRemaining = null;
+        $rateReset = null;
+        
+        if (!empty($headers)) {
+            $retryAfter = $headers['retry-after'] ?? $headers['Retry-After'] ?? null;
+            $rateLimit = $headers['ratelimit-limit'] ?? $headers['RateLimit-Limit'] ?? null;
+            $rateRemaining = $headers['ratelimit-remaining'] ?? $headers['RateLimit-Remaining'] ?? null;
+            $rateReset = $headers['ratelimit-reset'] ?? $headers['RateLimit-Reset'] ?? null;
+        }
+        
+        $rawBody = is_wp_error($res) ? '' : wp_remote_retrieve_body($res);
+        
+        return [
+            'http'           => $http,
+            'body'           => $body,
+            'error'          => is_wp_error($res) ? $res->get_error_message() : null,
+            'retry_after'    => $retryAfter ? (int)$retryAfter : null,
+            'rate_limit'     => $rateLimit,
+            'rate_remaining' => $rateRemaining,
+            'rate_reset'     => $rateReset,
+            'headers'        => $headers,
+            'raw_body'       => $rawBody,
+        ];
+    }
+}
+
+if (!function_exists('nce_finish_and_log')) {
+    function nce_finish_and_log(array $result, int $globalsId): array {
+        error_log('nce_finish_and_log: CALLED with globalsId=' . $globalsId);
+        
+        global $wpdb;
+        $table = $wpdb->prefix . 'klaviyo_globals';
+        
+        // Add timestamp if not present
+        if (!isset($result['timestamp'])) {
+            $result['timestamp'] = current_time('mysql');
+        }
+        
+        $json = wp_json_encode($result, JSON_PRETTY_PRINT);
+        if ($json === false) {
+            $json = json_encode(['error' => 'JSON encoding failed', 'json_error' => json_last_error_msg()]);
+        }
+        
+        $updated = $wpdb->update(
+            $table,
+            ['last_result' => $json],
+            ['id' => $globalsId],
+            ['%s'],
+            ['%d']
+        );
+        
+        if ($updated === false) {
+            error_log('nce_finish_and_log: Database update FAILED - ' . $wpdb->last_error);
+        }
+        
+        return $result;
+    }
+}
+
+if (!function_exists('nce_update_klaviyo_data_source_name')) {
+    function nce_update_klaviyo_data_source_name(string $dsId, string $newName, string $apiKey, string $apiVersion): array {
+        $url = "https://a.klaviyo.com/api/data-sources/{$dsId}";
+        $payload = [
+            'data' => [
+                'type' => 'data-source',
+                'id' => $dsId,
+                'attributes' => [
+                    'name' => $newName,
+                ],
+            ],
+        ];
+        
+        $response = nce_klaviyo_request('PATCH', $url, $apiKey, $apiVersion, $payload);
+        if ($response['http'] >= 200 && $response['http'] < 300) {
+            return ['success' => true];
+        }
+        
+        $error = $response['error'] ?? ($response['body']['errors'][0]['detail'] ?? 'Unknown');
+        return ['error' => $error, 'http' => $response['http'], 'body' => $response['body']];
     }
 }
 
