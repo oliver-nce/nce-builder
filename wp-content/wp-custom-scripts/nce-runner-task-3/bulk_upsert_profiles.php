@@ -75,6 +75,8 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n", FILE_APPEND);
         
         // --- Pre-check: only_run_if query ---
+        $onlyRunIfInfo = null; // Track only_run_if execution details
+        
         if ($onlyRunIf !== '') {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Checking only_run_if condition...\n", FILE_APPEND);
             error_log("nce_task_upsert_klaviyo_profiles: Executing only_run_if check");
@@ -82,6 +84,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             // Replace {{column_name}} placeholders with values from globals row
             $processedQuery = $onlyRunIf;
             $hasNullPlaceholder = false;
+            $nullPlaceholderName = null;
             
             // Find all {{placeholder}} patterns
             if (preg_match_all('/\{\{(\w+)\}\}/', $onlyRunIf, $matches)) {
@@ -91,6 +94,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                     
                     if ($value === null || $value === '') {
                         $hasNullPlaceholder = true;
+                        $nullPlaceholderName = $placeholder;
                         file_put_contents($temp_log, "[" . date('H:i:s') . "] Placeholder {$placeholder} is null/empty - will run job\n", FILE_APPEND);
                         error_log("nce_task_upsert_klaviyo_profiles: Placeholder {$placeholder} is null/empty");
                         break;
@@ -105,28 +109,53 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             // If any placeholder was null/empty, run the job (e.g., first run)
             if ($hasNullPlaceholder) {
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Running job (placeholder value missing - likely first run)\n", FILE_APPEND);
+                $onlyRunIfInfo = [
+                    'executed' => false,
+                    'reason' => "Placeholder {$nullPlaceholderName} is null/empty (first run)",
+                    'query' => $onlyRunIf
+                ];
             } else {
                 // Execute the check query
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] Processed query: " . substr($processedQuery, 0, 200) . "\n", FILE_APPEND);
+                $checkStartTime = microtime(true);
                 $checkResult = $wpdb->get_var($processedQuery);
+                $checkDuration = round((microtime(true) - $checkStartTime) * 1000, 2); // milliseconds
                 
                 if ($wpdb->last_error) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway ({$checkDuration}ms)\n", FILE_APPEND);
                     error_log("nce_task_upsert_klaviyo_profiles: only_run_if query error (running anyway): " . $wpdb->last_error);
+                    $onlyRunIfInfo = [
+                        'executed' => true,
+                        'duration_ms' => $checkDuration,
+                        'result' => null,
+                        'error' => $wpdb->last_error,
+                        'query' => $processedQuery
+                    ];
                     // Continue anyway if the check query fails (fail-safe)
                 } elseif (empty($checkResult)) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process ({$checkDuration}ms)\n", FILE_APPEND);
                     error_log("nce_task_upsert_klaviyo_profiles: Skipping - only_run_if returned empty");
                     return [
                         'success' => true,
                         'skipped' => true,
                         'message' => 'Skipped: only_run_if condition not met (no updates detected)',
                         'job_name' => $jobName,
-                        'only_run_if_query' => $processedQuery
+                        'only_run_if' => [
+                            'executed' => true,
+                            'duration_ms' => $checkDuration,
+                            'result' => null,
+                            'query' => $processedQuery
+                        ]
                     ];
                 } else {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult})\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult}, {$checkDuration}ms)\n", FILE_APPEND);
                     error_log("nce_task_upsert_klaviyo_profiles: only_run_if check passed");
+                    $onlyRunIfInfo = [
+                        'executed' => true,
+                        'duration_ms' => $checkDuration,
+                        'result' => $checkResult,
+                        'query' => $processedQuery
+                    ];
                 }
             }
         }
@@ -422,6 +451,11 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             'duration_seconds' => $duration
         ];
         
+        // Add only_run_if info if it was executed
+        if ($onlyRunIfInfo !== null) {
+            $result['only_run_if'] = $onlyRunIfInfo;
+        }
+        
         if (!empty($errors)) {
             $result['errors'] = $errors;
         }
@@ -513,6 +547,14 @@ if (!function_exists('nce_build_klaviyo_profile')) {
             return null; // Skip profiles without any identifier
         }
         
+        // Block spam profiles - must have last_name
+        $lastName = !empty($profile['last_name']) ? trim($profile['last_name']) : null;
+        if (empty($lastName)) {
+            $reason = 'no last_name (spam filter)';
+            error_log("nce_build_klaviyo_profile: Skipping profile without last_name: {$email}");
+            return null;
+        }
+        
         // Build attributes
         $attributes = [];
         
@@ -525,9 +567,8 @@ if (!function_exists('nce_build_klaviyo_profile')) {
         if (in_array('first_name', $usableColumns) && !empty($profile['first_name'])) {
             $attributes['first_name'] = trim($profile['first_name']);
         }
-        if (in_array('last_name', $usableColumns) && !empty($profile['last_name'])) {
-            $attributes['last_name'] = trim($profile['last_name']);
-        }
+        // last_name already validated above (required for spam filter)
+        $attributes['last_name'] = $lastName;
         
         // Build location object
         $location = [];

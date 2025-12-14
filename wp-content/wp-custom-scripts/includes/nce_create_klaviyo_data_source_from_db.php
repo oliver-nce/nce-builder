@@ -40,10 +40,11 @@ function nce_create_klaviyo_data_source_from_db(string $jobName = 'default'): ar
         ];
     }
 
-    $apiKey    = trim((string) ($globals['api_key'] ?? ''));
-    $baseName  = trim((string) ($globals['object_ds_name'] ?? 'default_ds'));
-    $revision  = trim((string) ($globals['api_version'] ?? '2025-10-15'));
-    $url       = 'https://a.klaviyo.com/api/data-sources';
+    $apiKey       = trim((string) ($globals['api_key'] ?? ''));
+    $baseName     = trim((string) ($globals['object_ds_name'] ?? 'default_ds'));
+    $revision     = trim((string) ($globals['api_version'] ?? '2025-10-15'));
+    $primaryKey   = trim((string) ($globals['wp_table_pk_column'] ?? ''));
+    $url          = 'https://a.klaviyo.com/api/data-sources';
 
     if ($apiKey === '') {
         return [
@@ -63,14 +64,23 @@ function nce_create_klaviyo_data_source_from_db(string $jobName = 'default'): ar
     $newTitle = $baseName . '_' . $jobName . '_' . date('Ymd_His');
 
     // --- 3. Build payload ---
+    // Note: Klaviyo data sources do NOT support primary_keys for deduplication.
+    // Deduplication must be handled in the source SQL query.
+    $attributes = [
+        'title'       => $newTitle,
+        'visibility'  => 'private',
+        'description' => "Auto-generated for job: {$jobName} at " . current_time('mysql'),
+    ];
+    
+    // Log primary key info (for reference in query design)
+    if ($primaryKey !== '') {
+        error_log("nce_create_klaviyo_data_source_from_db: Note - wp_table_pk_column='{$primaryKey}' (deduplication must be handled in SQL query, not by Klaviyo)");
+    }
+    
     $payload = [
         'data' => [
             'type'       => 'data-source',
-            'attributes' => [
-                'title'       => $newTitle,
-                'visibility'  => 'private',
-                'description' => "Auto-generated for job: {$jobName} at " . current_time('mysql'),
-            ],
+            'attributes' => $attributes,
         ],
     ];
 

@@ -1,6 +1,6 @@
 <?php
-// LAST UPDATED: 2025-11-28 19:05:00
-// v2.2.0 - 2025-11-28 (Added Task 7 & 8 for SMS backfill)
+// LAST UPDATED: 2025-12-03
+// v2.3.0 - 2025-12-03 (Added Task 9: Full sync orchestrator)
 /**
  * NCE Runner Task Manager
  * 
@@ -29,9 +29,9 @@ function nce_run_task(array $params): array {
     $task_registry = [
         1 => [
             'folder'   => 'nce-runner-task-1',
-            'file'     => 'task_upload_klaviyo.php',
-            'function' => 'nce_task_upload_klaviyo',
-            'description' => 'Upload data to Klaviyo'
+            'file'     => 'klaviyo_write_objects_optimized.php',
+            'function' => 'klaviyo_write_objects_optimized',
+            'description' => 'Upload data to Klaviyo (optimized, job_name=family_members)'
         ],
         2 => [
             'folder'   => 'nce-runner-task-2',
@@ -77,15 +77,15 @@ function nce_run_task(array $params): array {
         ],
         9 => [
             'folder'   => 'nce-runner-task-9',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'run_full_sync.php',
+            'function' => 'nce_task_run_full_sync',
+            'description' => 'Full sync: Task 3 → 1 → 4 → 5 in sequence'
         ],
         10 => [
             'folder'   => 'nce-runner-task-10',
-            'file'     => null,  // Reserved for future use
-            'function' => null,
-            'description' => 'Reserved'
+            'file'     => 'send_enrollment_events.php',
+            'function' => 'nce_task_send_enrollment_events',
+            'description' => 'Send new_enrollment events to Klaviyo for orders in wp_zoho_orders'
         ],
     ];
     
@@ -142,6 +142,11 @@ function nce_run_task(array $params): array {
             'task' => $task_num,
             'file' => $task_file
         ];
+    }
+    
+    // Provide default parameters for specific tasks
+    if ($task_num === 1 && empty($params['job_name'])) {
+        $params['job_name'] = 'family_members';
     }
     
     // Execute task function with all parameters

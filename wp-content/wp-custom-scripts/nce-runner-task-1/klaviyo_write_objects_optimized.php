@@ -70,6 +70,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         $batchLimit     = isset($g['batch_limit']) && $g['batch_limit'] !== null ? (int)$g['batch_limit'] : 0;
         $startingOffset = isset($g['starting_offset']) && $g['starting_offset'] !== null ? (int)$g['starting_offset'] : 0;
         $controlParam2  = trim((string)($g['control_param_2'] ?? ''));
+        $bulkMode       = isset($g['bulk']) && (int)$g['bulk'] === 1;
         $globalsId      = (int)$g['id'];
         $baseSql        = $queryString;
         $queryName      = 'query';
@@ -78,6 +79,8 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         $endpoint = 'https://a.klaviyo.com/api/data-source-record-bulk-create-jobs';
         
         // --- Pre-check: only_run_if query ---
+        $onlyRunIfInfo = null; // Track only_run_if execution details
+        
         if ($onlyRunIf !== '') {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Checking only_run_if condition...\n", FILE_APPEND);
             error_log("klaviyo_write_objects_optimized: Executing only_run_if check for job: {$jobName}");
@@ -85,6 +88,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             // Replace {{column_name}} placeholders with values from globals row
             $processedQuery = $onlyRunIf;
             $hasNullPlaceholder = false;
+            $nullPlaceholderName = null;
             
             // Find all {{placeholder}} patterns
             if (preg_match_all('/\{\{(\w+)\}\}/', $onlyRunIf, $matches)) {
@@ -94,6 +98,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                     
                     if ($value === null || $value === '') {
                         $hasNullPlaceholder = true;
+                        $nullPlaceholderName = $placeholder;
                         file_put_contents($temp_log, "[" . date('H:i:s') . "] Placeholder {$placeholder} is null/empty - will run job\n", FILE_APPEND);
                         error_log("klaviyo_write_objects_optimized: Placeholder {$placeholder} is null/empty for job: {$jobName}");
                         break;
@@ -108,42 +113,141 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             // If any placeholder was null/empty, run the job (e.g., first run)
             if ($hasNullPlaceholder) {
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Running job (placeholder value missing - likely first run)\n", FILE_APPEND);
+                $onlyRunIfInfo = [
+                    'executed' => false,
+                    'reason' => "Placeholder {$nullPlaceholderName} is null/empty (first run)",
+                    'query' => $onlyRunIf
+                ];
             } else {
                 // Execute the check query
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] Processed query: " . substr($processedQuery, 0, 200) . "\n", FILE_APPEND);
+                $checkStartTime = microtime(true);
                 $checkResult = $wpdb->get_var($processedQuery);
+                $checkDuration = round((microtime(true) - $checkStartTime) * 1000, 2); // milliseconds
                 
                 if ($wpdb->last_error) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway ({$checkDuration}ms)\n", FILE_APPEND);
                     error_log("klaviyo_write_objects_optimized: only_run_if query error (running anyway): " . $wpdb->last_error);
+                    $onlyRunIfInfo = [
+                        'executed' => true,
+                        'duration_ms' => $checkDuration,
+                        'result' => null,
+                        'error' => $wpdb->last_error,
+                        'query' => $processedQuery
+                    ];
                     // Continue anyway if the check query fails (fail-safe)
                 } elseif (empty($checkResult)) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process ({$checkDuration}ms)\n", FILE_APPEND);
                     error_log("klaviyo_write_objects_optimized: Skipping job {$jobName} - only_run_if returned empty");
                     return [
                         'success' => true,
                         'skipped' => true,
                         'message' => 'Skipped: only_run_if condition not met (no updates detected)',
                         'job_name' => $jobName,
-                        'only_run_if_query' => $processedQuery
+                        'only_run_if' => [
+                            'executed' => true,
+                            'duration_ms' => $checkDuration,
+                            'result' => null,
+                            'query' => $processedQuery
+                        ]
                     ];
                 } else {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult})\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult}, {$checkDuration}ms)\n", FILE_APPEND);
                     error_log("klaviyo_write_objects_optimized: only_run_if check passed for job: {$jobName}");
+                    $onlyRunIfInfo = [
+                        'executed' => true,
+                        'duration_ms' => $checkDuration,
+                        'result' => $checkResult,
+                        'query' => $processedQuery
+                    ];
                 }
             }
+        }
+
+        // --- Run sql_prep statements if configured ---
+        $sqlPrep = trim((string)($g['sql_prep'] ?? ''));
+        $sqlPrepInfo = null;
+        
+        if ($sqlPrep !== '') {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Running sql_prep statements...\n", FILE_APPEND);
+            error_log("klaviyo_write_objects_optimized: Executing sql_prep for job: {$jobName}");
+            
+            $prepStartTime = microtime(true);
+            $prepStatements = array_filter(array_map('trim', explode(';', $sqlPrep)));
+            $prepResults = [];
+            $prepFailed = false;
+            
+            foreach ($prepStatements as $stmt) {
+                if ($stmt === '') continue;
+                
+                $stmtDisplay = strlen($stmt) > 100 ? substr($stmt, 0, 100) . '...' : $stmt;
+                file_put_contents($temp_log, "[" . date('H:i:s') . "]   Executing: {$stmtDisplay}\n", FILE_APPEND);
+                
+                $stmtStart = microtime(true);
+                $stmtResult = $wpdb->query($stmt);
+                $stmtDuration = round((microtime(true) - $stmtStart) * 1000, 2);
+                
+                if ($wpdb->last_error) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "]   ✗ FAILED ({$stmtDuration}ms): " . $wpdb->last_error . "\n", FILE_APPEND);
+                    error_log("klaviyo_write_objects_optimized: sql_prep statement failed: " . $wpdb->last_error);
+                    $prepResults[] = [
+                        'statement' => $stmtDisplay,
+                        'success' => false,
+                        'error' => $wpdb->last_error,
+                        'duration_ms' => $stmtDuration
+                    ];
+                    $prepFailed = true;
+                    break; // Stop on first error
+                } else {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "]   ✓ Success ({$stmtDuration}ms)\n", FILE_APPEND);
+                    $prepResults[] = [
+                        'statement' => $stmtDisplay,
+                        'success' => true,
+                        'affected_rows' => $stmtResult,
+                        'duration_ms' => $stmtDuration
+                    ];
+                }
+            }
+            
+            $prepDuration = round((microtime(true) - $prepStartTime) * 1000, 2);
+            
+            $sqlPrepInfo = [
+                'executed' => true,
+                'duration_ms' => $prepDuration,
+                'statements' => $prepResults,
+                'success' => !$prepFailed
+            ];
+            
+            if ($prepFailed) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ sql_prep FAILED - aborting job\n", FILE_APPEND);
+                return [
+                    'error' => 'sql_prep failed - see details',
+                    'job_name' => $jobName,
+                    'sql_prep' => $sqlPrepInfo
+                ];
+            }
+            
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ sql_prep completed successfully ({$prepDuration}ms)\n", FILE_APPEND);
+            error_log("klaviyo_write_objects_optimized: sql_prep completed in {$prepDuration}ms for job: {$jobName}");
         }
 
         // Clear previous result and first_batch_payload before starting new run
         // $table already defined above
         $jobStartTime = current_time('mysql', true);
-        $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET last_run_datetime = %s WHERE id = %d",
-            $jobStartTime,
-            $globalsId
-        ));
-        $wpdb->query('COMMIT');
-        error_log("klaviyo_write_objects_optimized: Set last_run_datetime={$jobStartTime} for job {$jobName}");
+        
+        // Only update last_run_datetime if NOT in bulk mode
+        if (!$bulkMode) {
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$table} SET last_run_datetime = %s WHERE id = %d",
+                $jobStartTime,
+                $globalsId
+            ));
+            $wpdb->query('COMMIT');
+            error_log("klaviyo_write_objects_optimized: Set last_run_datetime={$jobStartTime} for job {$jobName}");
+        } else {
+            error_log("klaviyo_write_objects_optimized: BULK MODE - skipping last_run_datetime update for job {$jobName}");
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] BULK MODE enabled - will increment starting_offset instead of updating last_run_datetime\n", FILE_APPEND);
+        }
         $affected = $wpdb->query($wpdb->prepare(
             "UPDATE {$table} SET last_result = %s, first_batch_payload = NULL WHERE id = %d",
             "Optimized cron job has started\n",
@@ -493,12 +597,36 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         ));
         $wpdb->query('COMMIT');
         
+        // --- Bulk mode: increment starting_offset instead of updating last_run_datetime ---
+        $bulkModeInfo = null;
+        if ($bulkMode && $uploaded > 0) {
+            $newOffset = $startingOffset + $uploaded;
+            $wpdb->query($wpdb->prepare(
+                "UPDATE {$table} SET starting_offset = %d WHERE id = %d",
+                $newOffset,
+                $globalsId
+            ));
+            $wpdb->query('COMMIT');
+            
+            $bulkMsg = "[" . date('H:i:s') . "] BULK MODE: Incremented starting_offset from {$startingOffset} to {$newOffset} (+{$uploaded})\n";
+            file_put_contents($temp_log, $bulkMsg, FILE_APPEND);
+            error_log("klaviyo_write_objects_optimized: BULK MODE - starting_offset updated: {$startingOffset} -> {$newOffset}");
+            
+            $bulkModeInfo = [
+                'enabled' => true,
+                'previous_offset' => $startingOffset,
+                'new_offset' => $newOffset,
+                'increment' => $uploaded
+            ];
+        }
+        
         $dataSourceInfo = [
             'id' => $dsId,
             'name' => $dsName,
             'created_this_run' => $createdDataSource !== null,
         ];
-        return [
+        
+        $result = [
             'success' => true, 
             'message' => 'Job completed - see last_result field for details',
             'job_name' => $jobName,
@@ -513,6 +641,23 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 'total_retries' => $totalRetries,
             ]
         ];
+        
+        // Add only_run_if info if it was executed
+        if ($onlyRunIfInfo !== null) {
+            $result['only_run_if'] = $onlyRunIfInfo;
+        }
+        
+        // Add sql_prep info if it was executed
+        if ($sqlPrepInfo !== null) {
+            $result['sql_prep'] = $sqlPrepInfo;
+        }
+        
+        // Add bulk mode info if enabled
+        if ($bulkModeInfo !== null) {
+            $result['bulk_mode'] = $bulkModeInfo;
+        }
+        
+        return $result;
     }
 }
 
