@@ -237,13 +237,13 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         
         // Only update last_run_datetime if NOT in bulk mode
         if (!$bulkMode) {
-            $wpdb->query($wpdb->prepare(
-                "UPDATE {$table} SET last_run_datetime = %s WHERE id = %d",
-                $jobStartTime,
-                $globalsId
-            ));
-            $wpdb->query('COMMIT');
-            error_log("klaviyo_write_objects_optimized: Set last_run_datetime={$jobStartTime} for job {$jobName}");
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET last_run_datetime = %s WHERE id = %d",
+            $jobStartTime,
+            $globalsId
+        ));
+        $wpdb->query('COMMIT');
+        error_log("klaviyo_write_objects_optimized: Set last_run_datetime={$jobStartTime} for job {$jobName}");
         } else {
             error_log("klaviyo_write_objects_optimized: BULK MODE - skipping last_run_datetime update for job {$jobName}");
             file_put_contents($temp_log, "[" . date('H:i:s') . "] BULK MODE enabled - will increment starting_offset instead of updating last_run_datetime\n", FILE_APPEND);

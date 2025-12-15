@@ -195,8 +195,8 @@ if (!function_exists('nce_task_grant_email_consent')) {
                 $failed++;
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ FAILED for {$email} - HTTP {$http}\n", FILE_APPEND);
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] Response: {$responseBody}\n", FILE_APPEND);
-            }
-            
+                }
+                
             // Small delay to respect rate limits
             usleep(100000); // 100ms
         }

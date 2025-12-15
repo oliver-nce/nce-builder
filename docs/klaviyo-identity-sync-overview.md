@@ -1,77 +1,130 @@
-# Klaviyo Identity Sync - Overview
+# Klaviyo Integration: Three Systems Working Together
 
-## The Problem
+## Overview
 
-When a visitor browses your site without logging in, Klaviyo creates an **anonymous profile** (just a cookie, no email). 
+We use **three systems** to manage Klaviyo profiles:
 
-If that same person later places an order or logs in, Klaviyo might create a **second profile** with their email — losing all their previous browsing history.
-
-**Result:** Fragmented customer data, incomplete analytics, broken personalization.
-
----
-
-## Our Solution
-
-We built a lightweight WordPress plugin that fires **the moment a user logs in or registers**.
-
-It immediately tells Klaviyo:
-> "This browser cookie belongs to this email address."
-
-Klaviyo then **merges** the anonymous browsing history into the identified profile.
+| System | What It Does |
+|--------|--------------|
+| **Official Klaviyo Plugin** | Tracks WooCommerce orders + billing info |
+| **Our MU-Plugin** | Links anonymous sessions to identified users |
+| **Our Task 3** | Pushes WordPress users to Klaviyo with custom data |
 
 ---
 
-## What It Does
+## 1. Official Klaviyo for WooCommerce Plugin
 
-| Trigger | Action |
-|---------|--------|
-| User logs in | Link cookie → email |
-| User registers | Link cookie → email |
+**When it fires:** Order placed
 
----
+**What it sends to Klaviyo:**
+- Order event (products, totals)
+- Billing info (name, address, phone)
+- Creates/updates profile with that email
 
-## What It Doesn't Do
-
-- ❌ Doesn't duplicate what WooCommerce/Klaviyo already does
-- ❌ Doesn't slow down page loads (5ms timeout)
-- ❌ Doesn't affect orders or checkout
+**Limitation:** Before an order, Klaviyo only has anonymous visitor records (cookie-based). No link to WordPress user.
 
 ---
 
-## Business Value
+## 2. Our MU-Plugin: `klaviyo-identity-sync.php`
 
-| Before | After |
-|--------|-------|
-| Anonymous browsing lost | Browsing history preserved |
-| Duplicate profiles | Single customer view |
-| Incomplete journey data | Full customer journey |
-| Broken abandoned cart flows | Accurate targeting |
+**Purpose:** Link anonymous Klaviyo visitors to real WordPress users at login/registration.
+
+**When it fires:**
+| WordPress Hook | Trigger |
+|----------------|---------|
+| `wp_login` | User logs in |
+| `user_register` | New user creates account |
+
+**What it sends:**
+```php
+{ email, external_id }
+```
+
+**What it does NOT do:**
+- ❌ Does not create profiles
+- ❌ Does not send name, address, or custom data
+
+**What it DOES do:**
+- ✅ Tells Klaviyo: "This session cookie belongs to this email"
+- ✅ Klaviyo merges anonymous activity into the identified profile
+
+**Filters:**
+- Only `parent` role users
+- Skips users without `last_name` (spam filter)
 
 ---
 
-## Safety Features
+## 3. Our Task 3: `bulk_upsert_profiles.php`
 
-- **Spam filter:** Only syncs users with complete profiles (has last name)
-- **Role filter:** Only syncs "parent" accounts (not admins, coaches, etc.)
-- **Idempotent:** Safe to run multiple times, won't create duplicates
+**Purpose:** Push all new/updated WordPress users to Klaviyo — even if they never interact with WooCommerce.
+
+**When it runs:** Scheduled batch job (cron or manual)
+
+**What it sends:**
+- Profile attributes from custom SQL view (`wp_klaviyo_profiles_view`)
+- Custom fields: `family_id`, `player_ids`, order history, etc.
+- Sets new profiles to **Subscribed** (updates don't change subscription)
+
+**Key point:** This runs for ALL WordPress users, not just customers who placed orders.
 
 ---
 
-## How It Fits With Other Systems
+## How They Work Together
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    KLAVIYO PROFILE                      │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────────┐   ┌──────────────┐   ┌─────────────┐ │
-│  │ Our Plugin   │ + │ WooCommerce  │ + │  Task 3     │ │
-│  │              │   │  + Klaviyo   │   │             │ │
-│  │ Identity     │   │  Orders      │   │ Custom Data │ │
-│  │ (login/reg)  │   │  Billing     │   │ Enrichment  │ │
-│  └──────────────┘   └──────────────┘   └─────────────┘ │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+USER JOURNEY
+═══════════════════════════════════════════════════════════════
+
+Step 1: User browses site (not logged in)
+        └─→ Klaviyo Plugin: Creates anonymous visitor record
+
+Step 2: User logs in or registers
+        └─→ OUR MU-PLUGIN: "This cookie = this email"
+            Anonymous activity now linked to email
+
+Step 3: User places order
+        └─→ Klaviyo Plugin: Adds billing info + order event
+            Profile now has name, address, phone
+
+Step 4: Batch job runs (every few minutes)
+        └─→ OUR TASK 3: Adds custom attributes
+            Profile now has family_id, player_ids, etc.
+```
+
+---
+
+## Comparison
+
+| Feature | Klaviyo Plugin | Our MU-Plugin | Our Task 3 |
+|---------|----------------|---------------|------------|
+| **Trigger** | Order placed | Login/register | Scheduled |
+| **Speed** | Real-time | Real-time | Minutes |
+| **Creates profiles** | ✓ (at order) | ✗ | ✓ |
+| **Identity linking** | ✗ | ✓ | ✗ |
+| **Billing info** | ✓ | ✗ | ✗ |
+| **Order events** | ✓ | ✗ | ✗ |
+| **Custom attributes** | ✗ | ✗ | ✓ |
+| **Sets subscription** | ✗ | ✗ | ✓ (new only) |
+| **external_id** | ✗ | ✓ | ✓ |
+
+---
+
+## The Gap Our Plugin Fills
+
+```
+WITHOUT our plugin:
+────────────────────────────────────────────────────
+User browses   → Anonymous Profile A created
+User logs in   → [nothing happens]
+User orders    → Profile B created with billing
+                 Profile A orphaned forever!
+
+WITH our plugin:
+────────────────────────────────────────────────────
+User browses   → Anonymous Profile A created
+User logs in   → OUR PLUGIN: "Profile A = this email"
+User orders    → Billing added to Profile A
+                 All activity preserved! ✓
 ```
 
 ---
@@ -86,35 +139,28 @@ Klaviyo then **merges** the anonymous browsing history into the identified profi
 | Browse → Buy (same session) | ✅ Yes |
 | Browse → Register (same session) | ✅ Yes |
 
-### What We Cannot Fix
+### What Nobody Can Fix
 
 | User Behavior | Activity Attached? |
 |---------------|-------------------|
-| Browse → Leave → Never return | ❌ Lost forever |
-| Browse → Return with new cookie → Login | ❌ Old activity lost |
-| Browse on Device A → Login on Device B | ❌ Device A activity lost |
+| Browse → Leave → Never return | ❌ Lost |
+| Browse → Return with new cookie | ❌ Lost |
+| Browse on Device A → Login on Device B | ❌ Lost |
 
-### Why?
-
-This is a **Klaviyo platform limitation**, not our plugin.
-
-Klaviyo links profiles via:
-1. **Cookie** (expires, clears with browser)
-2. **Email** (permanent)
-
-If a user never provides their email during that cookie's lifetime, the activity cannot be recovered. This is true for all marketing platforms (Klaviyo, HubSpot, Marketo, etc.).
+This is a **platform limitation** (Klaviyo, HubSpot, all marketing platforms). If a user never identifies themselves during that cookie's lifetime, activity cannot be recovered.
 
 ---
 
 ## Summary
 
-**What we guarantee:** When a user logs in or registers, we immediately link their browsing history to their profile.
+| System | Role |
+|--------|------|
+| **Klaviyo Plugin** | Tracks orders + sends billing at checkout |
+| **Our MU-Plugin** | Links anonymous visitors to users at login |
+| **Our Task 3** | Enriches all WordPress users with custom data |
 
-**What nobody can fix:** If a user browses anonymously and never returns (or returns with a different browser/device), that anonymous activity cannot be recovered.
+**Together:** Complete profiles with identity resolution and custom attributes.
 
 ---
 
-## One Sentence
-
-**We ensure every customer has one complete profile in Klaviyo, with their full browsing and purchase history attached — as long as they log in or register during the same browser session.**
-
+*Last updated: 2025-12-14*

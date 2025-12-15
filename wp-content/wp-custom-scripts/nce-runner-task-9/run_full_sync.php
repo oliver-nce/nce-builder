@@ -1,7 +1,18 @@
 <?php
-// LAST UPDATED: 2025-12-11
-// v1.2.0 - Added 5th task (enrollment), default lookback now 14 hours
+// LAST UPDATED: 2025-12-14
+// v1.3.0 - Added on/off toggles for each task
 declare(strict_types=1);
+
+// ============================================
+// TASK TOGGLES - Set to false to disable
+// ============================================
+define('NCE_SYNC_TASK_3_ENABLED', true);   // Bulk Upsert Profiles
+define('NCE_SYNC_TASK_1_ENABLED', true);   // Upload family_members
+define('NCE_SYNC_TASK_4_ENABLED', false);  // Grant Email Consent (DISABLED)
+define('NCE_SYNC_TASK_5_ENABLED', false);  // Grant SMS Consent (DISABLED)
+define('NCE_SYNC_TASK_1B_ENABLED', true);  // Upload enrollment
+define('NCE_SYNC_TASK_10_ENABLED', true);  // Send Enrollment Events
+// ============================================
   
 /**
  * Run Full Sync - Task 9
@@ -55,43 +66,66 @@ if (!function_exists('nce_task_run_full_sync')) {
         
         // Define task sequence
         // skip_log_clear prevents tasks from clearing temp_log when run from full sync
+        // 'enabled' uses constants defined at top of file for easy toggling
         $taskSequence = [
             3 => [
                 'name' => 'Bulk Upsert Profiles',
                 'file' => 'nce-runner-task-3/bulk_upsert_profiles.php',
                 'function' => 'nce_task_upsert_klaviyo_profiles',
-                'params' => ['job_name' => 'profiles', 'lookback_hours' => $lookbackHours, 'skip_log_clear' => true]
+                'params' => ['job_name' => 'profiles', 'lookback_hours' => $lookbackHours, 'skip_log_clear' => true],
+                'enabled' => NCE_SYNC_TASK_3_ENABLED
             ],
             1 => [
                 'name' => 'Upload Data to Klaviyo',
                 'file' => 'nce-runner-task-1/klaviyo_write_objects_optimized.php',
                 'function' => 'klaviyo_write_objects_optimized',
-                'params' => ['job_name' => 'family_members', 'skip_log_clear' => true]
+                'params' => ['job_name' => 'family_members', 'skip_log_clear' => true],
+                'enabled' => NCE_SYNC_TASK_1_ENABLED
             ],
             4 => [
                 'name' => 'Grant Email Consent',
                 'file' => 'nce-runner-task-4/grant_email_consent.php',
                 'function' => 'nce_task_grant_email_consent',
-                'params' => ['job_name' => $jobName, 'lookback_hours' => 168, 'skip_log_clear' => true] // 1 week lookback
+                'params' => ['job_name' => $jobName, 'lookback_hours' => 168, 'skip_log_clear' => true],
+                'enabled' => NCE_SYNC_TASK_4_ENABLED
             ],
             5 => [
                 'name' => 'Grant SMS Consent',
                 'file' => 'nce-runner-task-5/grant_sms_consent.php',
                 'function' => 'nce_task_grant_sms_consent',
-                'params' => ['job_name' => $jobName, 'lookback_hours' => $lookbackHours, 'skip_log_clear' => true]
+                'params' => ['job_name' => $jobName, 'lookback_hours' => $lookbackHours, 'skip_log_clear' => true],
+                'enabled' => NCE_SYNC_TASK_5_ENABLED
             ],
             '1b' => [
                 'name' => 'Upload Enrollment Data to Klaviyo',
                 'file' => 'nce-runner-task-1/klaviyo_write_objects_optimized.php',
                 'function' => 'klaviyo_write_objects_optimized',
-                'params' => ['job_name' => 'enrollment', 'skip_log_clear' => true]
+                'params' => ['job_name' => 'enrollment', 'skip_log_clear' => true],
+                'enabled' => NCE_SYNC_TASK_1B_ENABLED
+            ],
+            10 => [
+                'name' => 'Send Enrollment Events',
+                'file' => 'nce-runner-task-10/send_enrollment_events.php',
+                'function' => 'nce_task_send_enrollment_events',
+                'params' => ['job_name' => $jobName, 'skip_log_clear' => true],
+                'enabled' => NCE_SYNC_TASK_10_ENABLED
             ]
         ];
         
         $basePath = ABSPATH . 'wp-content/wp-custom-scripts/';
         
         foreach ($taskSequence as $taskNum => $taskConfig) {
-            // Check if task should be skipped
+            // Check if task is disabled via toggle
+            if (isset($taskConfig['enabled']) && !$taskConfig['enabled']) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏸️  DISABLED Task {$taskNum}: {$taskConfig['name']}\n", FILE_APPEND);
+                $results["task_{$taskNum}"] = [
+                    'disabled' => true,
+                    'name' => $taskConfig['name']
+                ];
+                continue;
+            }
+            
+            // Check if task should be skipped via parameter
             if (in_array($taskNum, $skipTasks)) {
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPING Task {$taskNum}: {$taskConfig['name']}\n", FILE_APPEND);
                 $results["task_{$taskNum}"] = [
