@@ -1,6 +1,6 @@
 <?php
-// LAST UPDATED: 2025-11-28 16:30:00
-// v2.0.0 - 2025-11-28
+// LAST UPDATED: 2025-12-11
+// v2.1.0 - Skip profiles already subscribed to SMS, add skip_log_clear param
 declare(strict_types=1);
 
 /**
@@ -39,7 +39,8 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         
         $jobName = isset($params['job_name']) ? trim((string)$params['job_name']) : 'default';
         $lookbackHours = isset($params['lookback_hours']) ? (int)$params['lookback_hours'] : 2;
-        
+        $skipLogClear = !empty($params['skip_log_clear']); // Don't clear log when called from full sync
+         
         // Validate lookback hours
         if ($lookbackHours < 1) {
             return [
@@ -50,9 +51,11 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         
         error_log("nce_task_grant_sms_consent: Starting (Job: {$jobName}, Lookback: {$lookbackHours}h)");
         
-        // Initialize temp log file
+        // Initialize temp log file (only clear if not called from full sync)
         $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
+        if (!$skipLogClear) {
+            file_put_contents($temp_log, ""); // Clear the file
+        }
         file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT SMS CONSENT (NEW PROFILES) - Job: {$jobName}\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] ⚠️  SMS CONSENT: Only run for profiles with explicit SMS opt-in\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback window: {$lookbackHours} hours\n", FILE_APPEND);
@@ -106,8 +109,9 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalNew} NEW profiles within lookback window\n", FILE_APPEND);
         error_log("nce_task_grant_sms_consent: Found {$totalNew} new profiles from Klaviyo");
         
-        // Filter to only profiles with valid phone numbers
-        $phoneProfiles = array_filter($newProfiles, function($profile) {
+        // Filter to only profiles with valid phone numbers AND not already SMS subscribed
+        $alreadySubscribed = 0;
+        $phoneProfiles = array_filter($newProfiles, function($profile) use (&$alreadySubscribed) {
             $phone = !empty($profile['phone_number']) ? trim($profile['phone_number']) : null;
             if (!$phone) return false;
             
@@ -116,11 +120,21 @@ if (!function_exists('nce_task_grant_sms_consent')) {
                 return false;
             }
             
+            // Skip if already has SMS marketing consent
+            $smsStatus = $profile['subscriptions']['sms']['marketing']['consent'] ?? null;
+            if ($smsStatus === 'SUBSCRIBED') {
+                $alreadySubscribed++;
+                return false;
+            }
+            
             return true;
         });
         
         $totalWithPhone = count($phoneProfiles);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] {$totalWithPhone} new profiles have valid phone numbers\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] {$totalWithPhone} new profiles have valid phone numbers (need consent)\n", FILE_APPEND);
+        if ($alreadySubscribed > 0) {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] {$alreadySubscribed} profiles already have SMS consent (skipped)\n", FILE_APPEND);
+        }
         
         if ($totalWithPhone === 0) {
             return [
@@ -245,14 +259,15 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         $completionMsg .= "[" . date('H:i:s') . "] Lookback window: {$lookbackHours} hours\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total profiles fetched: {$totalFetched}\n";
         $completionMsg .= "[" . date('H:i:s') . "] New profiles found: {$totalNew}\n";
-        $completionMsg .= "[" . date('H:i:s') . "] With valid phone: {$totalWithPhone}\n";
+        $completionMsg .= "[" . date('H:i:s') . "] Already SMS subscribed: {$alreadySubscribed}\n";
+        $completionMsg .= "[" . date('H:i:s') . "] With valid phone (need consent): {$totalWithPhone}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Batches processed: {$totalBatches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Consent granted: {$grantedCount}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Failed batches: {$failedBatches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Duration: {$duration}s\n";
         
         file_put_contents($temp_log, $completionMsg, FILE_APPEND);
-        error_log("nce_task_grant_sms_consent: Complete - Granted: {$grantedCount}, Failed: {$failedBatches}");
+        error_log("nce_task_grant_sms_consent: Complete - Granted: {$grantedCount}, Already subscribed: {$alreadySubscribed}, Failed: {$failedBatches}");
         
         $result = [
             'success' => true,
@@ -262,6 +277,7 @@ if (!function_exists('nce_task_grant_sms_consent')) {
             'cutoff_datetime' => $cutoffDatetime,
             'total_fetched' => $totalFetched,
             'new_profiles_found' => $totalNew,
+            'already_subscribed' => $alreadySubscribed,
             'profiles_with_phone' => $totalWithPhone,
             'granted' => $grantedCount,
             'batches_processed' => $totalBatches,
@@ -309,9 +325,14 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
                 $queryParams = http_build_query([
                     'filter' => $filter,
                     'fields[profile]' => 'email,phone_number,created',
+                    'additional-fields[profile]' => 'subscriptions',
                     'page[size]' => 100
                 ]);
                 $fullUrl = $pageUrl . '?' . $queryParams;
+                
+                // DEBUG: Log the filter and full URL
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Filter: {$filter}\n", FILE_APPEND);
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Full URL: {$fullUrl}\n", FILE_APPEND);
             } else {
                 $fullUrl = $pageUrl;
             }
@@ -347,11 +368,24 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
             
             // Extract profiles from this page
             if (!empty($body['data'])) {
+                // DEBUG: Log sample phone numbers from first page
+                if ($pageCount === 1) {
+                    $samplePhones = [];
+                    $sampleCreated = [];
+                    foreach (array_slice($body['data'], 0, 5) as $p) {
+                        $samplePhones[] = $p['attributes']['phone_number'] ?? '(null)';
+                        $sampleCreated[] = $p['attributes']['created'] ?? '(null)';
+                    }
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Sample phones: " . implode(', ', $samplePhones) . "\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Sample created dates: " . implode(', ', $sampleCreated) . "\n", FILE_APPEND);
+                }
+                
                 foreach ($body['data'] as $profile) {
                     $allProfiles[] = [
                         'email' => $profile['attributes']['email'] ?? null,
                         'phone_number' => $profile['attributes']['phone_number'] ?? null,
-                        'created_at' => $profile['attributes']['created'] ?? null
+                        'created_at' => $profile['attributes']['created'] ?? null,
+                        'subscriptions' => $profile['attributes']['subscriptions'] ?? null
                     ];
                 }
                 

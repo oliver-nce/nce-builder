@@ -1,0 +1,336 @@
+<!-- Klaviyo Sync Widget - Embed on WordPress page using Custom HTML block -->
+<div id="klaviyo-sync-widget">
+  <style>
+    #klaviyo-sync-widget {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      max-width: 700px;
+      margin: 20px auto;
+      text-align: center;
+    }
+    
+    #klaviyo-sync-widget h2 {
+      color: #1a1a2e;
+      margin: 0 0 8px 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    
+    #klaviyo-sync-widget .subtitle {
+      color: #6b7280;
+      margin: 0 0 24px 0;
+      font-size: 0.95rem;
+    }
+    
+    #klaviyo-sync-btn {
+      padding: 14px 32px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #000;
+      background: #d4e157;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 4px 14px rgba(212, 225, 87, 0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    #klaviyo-sync-btn:hover:not(:disabled) {
+      background: #c6d449;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(212, 225, 87, 0.5);
+    }
+    
+    #klaviyo-sync-btn:disabled {
+      opacity: 0.8;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    #klaviyo-sync-btn .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    #klaviyo-sync-status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin: 20px 0 16px 0;
+      font-size: 0.9rem;
+      display: none;
+    }
+    
+    #klaviyo-sync-status.running {
+      display: block;
+      background: #f0f4ff;
+      border: 1px solid #c7d2fe;
+      color: #4f46e5;
+    }
+    
+    #klaviyo-sync-status.success {
+      display: block;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #059669;
+    }
+    
+    #klaviyo-sync-status.error {
+      display: block;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+    }
+    
+    #klaviyo-log-container {
+      display: none;
+      margin-top: 20px;
+      text-align: left;
+    }
+    
+    #klaviyo-log-container.visible {
+      display: block;
+    }
+    
+    #klaviyo-log-container .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    #klaviyo-log-container .log-title {
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.95rem;
+    }
+    
+    #klaviyo-copy-btn {
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #374151;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    #klaviyo-copy-btn:hover {
+      background: #e5e7eb;
+      border-color: #9ca3af;
+    }
+    
+    #klaviyo-copy-btn.copied {
+      background: #d1fae5;
+      border-color: #6ee7b7;
+      color: #059669;
+    }
+    
+    #klaviyo-log-area {
+      width: 100%;
+      height: 300px;
+      padding: 16px;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #e5e7eb;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      resize: vertical;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      box-sizing: border-box;
+    }
+    
+    #klaviyo-log-area:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+  </style>
+
+  <h2>Klaviyo Sync</h2>
+  <p class="subtitle">Update profiles, family members and enrollments in Klaviyo</p>
+  
+  <button id="klaviyo-sync-btn" onclick="runKlaviyoSync()">
+    <span class="btn-text">Update Klaviyo Profiles, Family Members and Enrollments</span>
+  </button>
+  
+  <div id="klaviyo-sync-status"></div>
+  
+  <div id="klaviyo-log-container">
+    <div class="log-header">
+      <span class="log-title">Results</span>
+      <button id="klaviyo-copy-btn" onclick="copyLog()">
+        <span class="copy-icon">📋</span>
+        <span class="copy-text">Copy</span>
+      </button>
+    </div>
+    <textarea id="klaviyo-log-area" readonly></textarea>
+  </div>
+</div>
+
+<script>
+(function() {
+  const baseUrl = window.location.origin;
+  
+  window.runKlaviyoSync = async function() {
+    const btn = document.getElementById('klaviyo-sync-btn');
+    const status = document.getElementById('klaviyo-sync-status');
+    const logContainer = document.getElementById('klaviyo-log-container');
+    const logArea = document.getElementById('klaviyo-log-area');
+    
+    // Disable button and show loading
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div><span class="btn-text">Running...</span>';
+    
+    status.className = 'running';
+    status.innerHTML = '⏳ Running full sync... This may take a few minutes.';
+    logContainer.classList.remove('visible');
+    logArea.value = '';
+    
+    try {
+      const url = `${baseUrl}/wp-json/nce/v1/run?task=9`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        status.className = 'success';
+        status.innerHTML = `✅ Sync completed successfully in ${data.total_duration_seconds}s`;
+      } else {
+        status.className = 'error';
+        status.innerHTML = `⚠️ ${data.message || 'Sync completed with errors'}`;
+      }
+      
+      // Generate log text
+      logArea.value = generateLogText(data);
+      logContainer.classList.add('visible');
+      
+    } catch (error) {
+      status.className = 'error';
+      status.innerHTML = `❌ Error: ${error.message}`;
+      logArea.value = `ERROR: ${error.message}`;
+      logContainer.classList.add('visible');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="btn-text">Update Klaviyo Profiles and Family Members</span>';
+    }
+  };
+  
+  function generateLogText(data) {
+    let log = '';
+    const line = '─'.repeat(50);
+    
+    log += `KLAVIYO SYNC RESULTS\n`;
+    log += `${line}\n`;
+    log += `Status: ${data.success ? 'SUCCESS' : 'COMPLETED WITH ERRORS'}\n`;
+    log += `Job: ${data.job_name || 'default'}\n`;
+    log += `Lookback: ${data.lookback_hours || 2} hours\n`;
+    log += `Total Duration: ${data.total_duration_seconds}s\n`;
+    log += `${line}\n\n`;
+    
+    if (!data.tasks) {
+      log += 'No task data available.\n';
+      return log;
+    }
+    
+    const taskOrder = ['task_3', 'task_1', 'task_4', 'task_5', 'task_1b'];
+    const taskLabels = {
+      'task_3': 'TASK 3: Bulk Upsert Profiles',
+      'task_1': 'TASK 1: Upload to Klaviyo (Family Members)',
+      'task_4': 'TASK 4: Grant Email Consent',
+      'task_5': 'TASK 5: Grant SMS Consent',
+      'task_1b': 'TASK 1b: Upload to Klaviyo (Enrollment)'
+    };
+    
+    for (const taskKey of taskOrder) {
+      const task = data.tasks[taskKey];
+      if (!task) continue;
+      
+      const label = taskLabels[taskKey] || taskKey;
+      const statusIcon = task.error ? '❌' : (task.skipped ? '⏭️' : '✅');
+      const statusText = task.error ? 'ERROR' : (task.skipped ? 'SKIPPED' : 'OK');
+      
+      log += `${statusIcon} ${label}\n`;
+      log += `   Status: ${statusText}`;
+      if (task.duration_seconds) log += ` (${task.duration_seconds}s)`;
+      log += '\n';
+      
+      if (task.error) {
+        log += `   Error: ${task.error}\n`;
+      } else if (!task.skipped) {
+        // Task-specific details
+        if (taskKey === 'task_3') {
+          if (task.synced !== undefined) log += `   Synced: ${task.synced}\n`;
+          if (task.skipped !== undefined) log += `   Skipped: ${task.skipped}\n`;
+          if (task.failed_batches !== undefined) log += `   Failed batches: ${task.failed_batches}\n`;
+        } else if (taskKey === 'task_1' || taskKey === 'task_1b') {
+          if (task.profiles_synced !== undefined) log += `   Profiles synced: ${task.profiles_synced}\n`;
+          if (task.events_synced !== undefined) log += `   Events synced: ${task.events_synced}\n`;
+          if (task.stats?.uploaded !== undefined) log += `   Uploaded: ${task.stats.uploaded}\n`;
+          if (task.stats?.batches !== undefined) log += `   Batches: ${task.stats.batches}\n`;
+        } else if (taskKey === 'task_4' || taskKey === 'task_5') {
+          if (task.new_profiles_found !== undefined) log += `   New profiles found: ${task.new_profiles_found}\n`;
+          if (task.granted !== undefined) log += `   Consent granted: ${task.granted}\n`;
+          if (task.failed_batches !== undefined && task.failed_batches > 0) log += `   Failed batches: ${task.failed_batches}\n`;
+        }
+      }
+      
+      log += '\n';
+    }
+    
+    log += `${line}\n`;
+    log += `Completed: ${new Date().toLocaleString()}\n`;
+    
+    return log;
+  }
+  
+  window.copyLog = function() {
+    const logArea = document.getElementById('klaviyo-log-area');
+    const copyBtn = document.getElementById('klaviyo-copy-btn');
+    
+    logArea.select();
+    logArea.setSelectionRange(0, 99999);
+    
+    navigator.clipboard.writeText(logArea.value).then(() => {
+      copyBtn.classList.add('copied');
+      copyBtn.querySelector('.copy-text').textContent = 'Copied!';
+      
+      setTimeout(() => {
+        copyBtn.classList.remove('copied');
+        copyBtn.querySelector('.copy-text').textContent = 'Copy';
+      }, 2000);
+    }).catch(err => {
+      // Fallback for older browsers
+      document.execCommand('copy');
+      copyBtn.querySelector('.copy-text').textContent = 'Copied!';
+      setTimeout(() => {
+        copyBtn.querySelector('.copy-text').textContent = 'Copy';
+      }, 2000);
+    });
+  };
+})();
+</script>

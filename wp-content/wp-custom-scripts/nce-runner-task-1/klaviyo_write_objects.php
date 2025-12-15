@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * Klaviyo Upload Task - Task 1
+ * Klaviyo Upload Task - Task 12-2-25
  * 
  * Uploads database records to Klaviyo Data Source API in batches.
  * Complete self-contained task - handles setup, execution, logging, and cleanup.
@@ -39,34 +39,28 @@ if (!function_exists('klaviyo_write_objects')) {
         $apiKey         = trim((string)($g['api_key'] ?? ''));
         $apiVersion     = trim((string)($g['api_version'] ?? '2025-10-15'));
         $dsId           = trim((string)($g['object_ds_id'] ?? ''));
-        $objectQuery1   = trim((string)($g['object_query'] ?? ''));
-        $objectQuery2   = trim((string)($g['object_query_2'] ?? ''));
-        $objectQuery3   = trim((string)($g['object_query_3'] ?? ''));
-        $batchSize      = isset($g['batch_size']) && $g['batch_size'] !== null ? (int)$g['batch_size'] : 450;
+        $queryString    = trim((string)($g['query'] ?? ''));
+        $batchSize      = 450;
         $batchLimit     = isset($g['batch_limit']) && $g['batch_limit'] !== null ? (int)$g['batch_limit'] : 0;
         $startingOffset = isset($g['starting_offset']) && $g['starting_offset'] !== null ? (int)$g['starting_offset'] : 0;
-        $queryToUse     = isset($g['query_to_use']) && $g['query_to_use'] !== null ? (int)$g['query_to_use'] : 1;
         $controlParam2  = trim((string)($g['control_param_2'] ?? ''));
         $globalsId      = (int)$g['id'];
+        $baseSql        = $queryString;
+        $queryName      = 'query';
         
-        // Select which query to use based on query_to_use field
-        // 1 or null => object_query, 2 => object_query_2, 3 => object_query_3
-        $baseSql = '';
-        $queryName = '';
-        switch ($queryToUse) {
-            case 2:
-                $baseSql = $objectQuery2;
-                $queryName = 'object_query_2';
-                break;
-            case 3:
-                $baseSql = $objectQuery3;
-                $queryName = 'object_query_3';
-                break;
-            case 1:
-            default:
-                $baseSql = $objectQuery1;
-                $queryName = 'object_query';
-                break;
+        if (isset($params['batch_limit'])) {
+            $batchLimitParam = max(0, (int)$params['batch_limit']);
+            if ($batchLimitParam !== $batchLimit) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Override batch_limit from request: {$batchLimitParam}\n", FILE_APPEND);
+            }
+            $batchLimit = $batchLimitParam;
+        }
+        if (isset($params['starting_offset'])) {
+            $startingOffsetParam = max(0, (int)$params['starting_offset']);
+            if ($startingOffsetParam !== $startingOffset) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Override starting_offset from request: {$startingOffsetParam}\n", FILE_APPEND);
+            }
+            $startingOffset = $startingOffsetParam;
         }
         
     
@@ -74,6 +68,14 @@ if (!function_exists('klaviyo_write_objects')) {
 
         // Clear previous result and first_batch_payload before starting new run
         $table = $wpdb->prefix . 'klaviyo_globals';
+        $jobStartTime = current_time('mysql');
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET last_run_date_time = %s WHERE id = %d",
+            $jobStartTime,
+            $globalsId
+        ));
+        $wpdb->query('COMMIT');
+        error_log("klaviyo_write_objects: Set last_run_date_time={$jobStartTime} for globals ID {$globalsId}");
         $affected = $wpdb->query($wpdb->prepare(
             "UPDATE {$table} SET last_result = %s, first_batch_payload = NULL WHERE id = %d",
             "Cron job has started\n",
@@ -98,7 +100,7 @@ if (!function_exists('klaviyo_write_objects')) {
             return nce_finish_and_log(['error' => 'Missing object_ds_id (run data source creation first)'], $globalsId);
         }
         if ($baseSql === '') {
-            return nce_finish_and_log(['error' => "Missing {$queryName} (query_to_use={$queryToUse})"], $globalsId);
+            return nce_finish_and_log(['error' => 'Missing query (configure wp_klaviyo_globals.query)'], $globalsId);
         }
         if ($batchSize < 1 || $batchSize > 1000) {
             return nce_finish_and_log(['error' => 'batch_size must be between 1 and 1000'], $globalsId);
@@ -111,24 +113,22 @@ if (!function_exists('klaviyo_write_objects')) {
         }
         
         // --- 4. Initialize counters ---
-        $offset       = $startingOffset;  // Use starting_offset from database (defaults to 0)
-        $batches      = 0;
-        $uploaded     = 0;
-        $delaySeconds = 3;  // Start with 3 seconds, increase if rate limited
+        $offset         = $startingOffset;  // Use starting_offset from database (defaults to 0)
+        $batches        = 0;
+        $uploaded       = 0;
+        $delaySeconds   = 3;  // Start with 3 seconds, increase if rate limited
+        $ranOutOfRows   = false;
+        $limitTriggered = false;
         
         // Log configuration
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch size: {$batchSize} records per batch\n", FILE_APPEND);
-        if ($batchSize !== 90) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] NOTE: Using custom batch size (default is 90)\n", FILE_APPEND);
-            error_log("klaviyo_write_objects: Using custom batch size: {$batchSize}");
+        error_log("klaviyo_write_objects: Using batch size: {$batchSize}");
+        if ($batchLimit > 0) {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch limit: {$batchLimit} batches per run\n", FILE_APPEND);
         }
         if ($startingOffset > 0) {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Using starting_offset: {$startingOffset}\n", FILE_APPEND);
             error_log("klaviyo_write_objects: Starting from offset {$startingOffset}");
-        }
-        if ($queryToUse > 1) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Using query: {$queryName} (query_to_use={$queryToUse})\n", FILE_APPEND);
-            error_log("klaviyo_write_objects: Using alternate query: {$queryName}");
         }
         if ($controlParam2 !== '' && intval($controlParam2) > 0) {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] control_param_2: {$controlParam2}\n", FILE_APPEND);
@@ -144,6 +144,7 @@ if (!function_exists('klaviyo_write_objects')) {
             // Check batch limit
             if ($batchLimit > 0 && $batches >= $batchLimit) {
                 error_log("klaviyo_write_objects: Batch limit reached ({$batchLimit})");
+                $limitTriggered = true;
                 break;
             }
             
@@ -154,6 +155,7 @@ if (!function_exists('klaviyo_write_objects')) {
             // Handle SQL errors
             if ($wpdb->last_error) {
                 file_put_contents($temp_log, "[" . date('H:i:s') . "] SQL ERROR - " . $wpdb->last_error . "\n", FILE_APPEND);
+                nce_update_starting_offset($globalsId, $offset);
                 
                 return nce_finish_and_log([
                     'error'   => 'SQL error: ' . $wpdb->last_error,
@@ -165,6 +167,7 @@ if (!function_exists('klaviyo_write_objects')) {
             
             // No more rows - done
             if (empty($rows)) {
+                $ranOutOfRows = true;
                 break;
             }
             
@@ -338,6 +341,7 @@ if (!function_exists('klaviyo_write_objects')) {
                 file_put_contents($temp_log, $failMsg, FILE_APPEND);
                 
                 // Append failure message to last_result
+                nce_update_starting_offset($globalsId, $offset);
                 $wpdb->query($wpdb->prepare(
                     "UPDATE {$table} SET last_result = CONCAT(COALESCE(last_result, ''), %s) WHERE id = %d",
                     $failMsg,
@@ -357,6 +361,7 @@ if (!function_exists('klaviyo_write_objects')) {
             if ($batchLimit > 0 && $batches >= $batchLimit) {
                 $limitMsg = "[" . date('H:i:s') . "] Batch limit reached ({$batchLimit})\n";
                 file_put_contents($temp_log, $limitMsg, FILE_APPEND);
+                $limitTriggered = true;
                 $wpdb->query($wpdb->prepare(
                     "UPDATE {$table} SET last_result = CONCAT(COALESCE(last_result, ''), %s) WHERE id = %d",
                     $limitMsg,
@@ -372,6 +377,14 @@ if (!function_exists('klaviyo_write_objects')) {
         $completionMsg .= "[" . date('H:i:s') . "] Total batches: {$batches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total uploaded: {$uploaded}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Final delay: {$delaySeconds}s\n";
+        
+        $nextStartingOffset = $ranOutOfRows ? 0 : $offset;
+        nce_update_starting_offset($globalsId, $nextStartingOffset);
+        if ($limitTriggered && !$ranOutOfRows) {
+            $completionMsg .= "[" . date('H:i:s') . "] Next starting_offset saved for resume: {$nextStartingOffset}\n";
+        } elseif ($ranOutOfRows) {
+            $completionMsg .= "[" . date('H:i:s') . "] Dataset exhausted - starting_offset reset to 0\n";
+        }
         
         file_put_contents($temp_log, $completionMsg, FILE_APPEND);
         
@@ -518,6 +531,20 @@ if (!function_exists('nce_finish_and_log')) {
         }
         
         return $result;
+    }
+}
+
+if (!function_exists('nce_update_starting_offset')) {
+    function nce_update_starting_offset(int $globalsId, int $newOffset): void {
+        global $wpdb;
+        $table = $wpdb->prefix . 'klaviyo_globals';
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET starting_offset = %d WHERE id = %d",
+            $newOffset,
+            $globalsId
+        ));
+        $wpdb->query('COMMIT');
+        error_log("nce_update_starting_offset: Updated globals {$globalsId} starting_offset to {$newOffset}");
     }
 }
 

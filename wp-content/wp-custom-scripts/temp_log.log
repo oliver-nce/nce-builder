@@ -1,76 +1,36 @@
-[2025-11-30 21:35:06] PROCESS CACHED PROFILES - Job: default
-[21:35:06] Script version: 1.2.0 (updated: 2025-11-28 19:45:00)
-[21:35:06] Batch range: Starting from batch 51, max 25 batches this run
-[21:35:06] Configuration loaded
-[21:35:06] API Version: 2025-10-15
-[21:35:06] Reading cached profiles from database...
-[21:35:06] Found 8169 cached profiles (cached at: 2025-11-28 19:24:19)
-[21:35:06] Total Klaviyo batches available: 82
-[21:35:06] Will process batches 51 to 75 (max 25 this run)
-[21:35:06] Processing batch 51/82 (100 profiles)...
-[21:35:06] Sample phones: +18184978111, +16312521628, +16179977405, +12039170315, +18563616386
-[21:35:08] ✓ Batch 51 submitted successfully (Job ID: unknown)
-[21:35:08] Processing batch 52/82 (100 profiles)...
-[21:35:09] ✓ Batch 52 submitted successfully (Job ID: unknown)
-[21:35:10] Processing batch 53/82 (100 profiles)...
-[21:35:11] ✓ Batch 53 submitted successfully (Job ID: unknown)
-[21:35:12] Processing batch 54/82 (100 profiles)...
-[21:35:13] ✓ Batch 54 submitted successfully (Job ID: unknown)
-[21:35:13] Processing batch 55/82 (100 profiles)...
-[21:35:14] ✓ Batch 55 submitted successfully (Job ID: unknown)
-[21:35:15] Processing batch 56/82 (100 profiles)...
-[21:35:16] ✓ Batch 56 submitted successfully (Job ID: unknown)
-[21:35:16] Processing batch 57/82 (100 profiles)...
-[21:35:18] ✓ Batch 57 submitted successfully (Job ID: unknown)
-[21:35:18] Processing batch 58/82 (100 profiles)...
-[21:35:19] ✓ Batch 58 submitted successfully (Job ID: unknown)
-[21:35:20] Processing batch 59/82 (100 profiles)...
-[21:35:21] ✓ Batch 59 submitted successfully (Job ID: unknown)
-[21:35:22] Processing batch 60/82 (100 profiles)...
-[21:35:23] ✓ Batch 60 submitted successfully (Job ID: unknown)
-[21:35:23] Processing batch 61/82 (100 profiles)...
-[21:35:24] ✗ Batch 61 failed - HTTP 400: Phone number is valid but is not in a supported region for this account. Please configure a sending number for this region.
-[21:35:24] Retrying batch 61 one phone at a time to identify bad number(s)...
-[21:35:27]   ✗ Failed: +18683024135 - Phone number is valid but is not in a supported region for this account. Please configure a sending number for this region.
-[21:35:57] Retry complete: 99 succeeded, 1 failed
-[21:35:58] Processing batch 62/82 (100 profiles)...
-[21:35:59] ✓ Batch 62 submitted successfully (Job ID: unknown)
-[21:36:00] Processing batch 63/82 (100 profiles)...
-[21:36:01] ✓ Batch 63 submitted successfully (Job ID: unknown)
-[21:36:01] Processing batch 64/82 (100 profiles)...
-[21:36:02] ✓ Batch 64 submitted successfully (Job ID: unknown)
-[21:36:03] Processing batch 65/82 (100 profiles)...
-[21:36:04] ✓ Batch 65 submitted successfully (Job ID: unknown)
-[21:36:04] Processing batch 66/82 (100 profiles)...
-[21:36:06] ✓ Batch 66 submitted successfully (Job ID: unknown)
-[21:36:06] Processing batch 67/82 (100 profiles)...
-[21:36:07] ✓ Batch 67 submitted successfully (Job ID: unknown)
-[21:36:08] Processing batch 68/82 (100 profiles)...
-[21:36:09] ✓ Batch 68 submitted successfully (Job ID: unknown)
-[21:36:10] Processing batch 69/82 (100 profiles)...
-[21:36:11] ✓ Batch 69 submitted successfully (Job ID: unknown)
-[21:36:11] Processing batch 70/82 (100 profiles)...
-[21:36:12] ✓ Batch 70 submitted successfully (Job ID: unknown)
-[21:36:13] Processing batch 71/82 (100 profiles)...
-[21:36:14] ✓ Batch 71 submitted successfully (Job ID: unknown)
-[21:36:15] Processing batch 72/82 (100 profiles)...
-[21:36:16] ✓ Batch 72 submitted successfully (Job ID: unknown)
-[21:36:16] Processing batch 73/82 (100 profiles)...
-[21:36:17] ✓ Batch 73 submitted successfully (Job ID: unknown)
-[21:36:18] Processing batch 74/82 (100 profiles)...
-[21:36:19] ✓ Batch 74 submitted successfully (Job ID: unknown)
-[21:36:20] Processing batch 75/82 (100 profiles)...
-[21:36:21] ✓ Batch 75 submitted successfully (Job ID: unknown)
-[21:36:21] Reached max_batches limit (25), stopping
+[2025-12-03 18:45:43] GRANT SMS CONSENT (NEW PROFILES) - Job: default
+[18:45:43] ⚠️  SMS CONSENT: Only run for profiles with explicit SMS opt-in
+[18:45:43] Lookback window: 2 hours
+[18:45:43] Cutoff datetime: 2025-12-03 16:45:43
+[18:45:43] Configuration loaded
+[18:45:43] API Version: 2025-10-15
+[18:45:43] Fetching profiles created after 2025-12-03 16:45:43 from Klaviyo API...
+[18:45:43] Fetching profiles created after 2025-12-03 16:45:43...
+[18:45:43] DEBUG Filter: greater-than(created,2025-12-03T16:45:43+00:00)
+[18:45:43] DEBUG Full URL: https://a.klaviyo.com/api/profiles?filter=greater-than%28created%2C2025-12-03T16%3A45%3A43%2B00%3A00%29&fields%5Bprofile%5D=email%2Cphone_number%2Ccreated&page%5Bsize%5D=100
+[18:45:43] Fetching page 1...
+[18:45:44] DEBUG Sample phones: (null), +15627169503, (null)
+[18:45:44] DEBUG Sample created dates: 2025-12-03T17:45:45+00:00, 2025-12-03T18:27:53+00:00, 2025-12-03T18:27:53+00:00
+[18:45:44] Page 1: 3 profiles
+[18:45:44] No more pages, fetch complete
+[18:45:44] Total recent profiles fetched: 3
+[18:45:44] Found 3 NEW profiles within lookback window
+[18:45:44] 1 new profiles have valid phone numbers
+[18:45:44] Processing 1 batch(es) of up to 100 profiles each
+[18:45:44] Processing batch 1/1 (1 profiles)...
+[18:45:44] Sample phones: +15627169503
+[18:45:44] ✓ Batch 1 submitted successfully (Job ID: unknown)
+[18:45:44] --- SMS CONSENT GRANT COMPLETE ---
+[18:45:44] Lookback window: 2 hours
+[18:45:44] Total profiles fetched: 
+[18:45:44] New profiles found: 3
+[18:45:44] With valid phone: 1
+[18:45:44] Batches processed: 1
+[18:45:44] Consent granted: 1
+[18:45:44] Failed batches: 0
+[18:45:44] Duration: 0.58s
+[18:45:44] ✅ Task 5 completed in 0.58s
 
-[21:36:21] === SMS CONSENT PROCESSING RUN COMPLETE ===
-[21:36:21] Total cached profiles: 8169
-[21:36:21] Cached at: 2025-11-28 19:24:19
-[21:36:21] Total Klaviyo batches available: 82
-[21:36:21] Batches skipped (before start_from): 50
-[21:36:21] Batches processed this run: 25
-[21:36:21] Consent granted: 2499
-[21:36:21] Failed batches: 1
-[21:36:21] Duration: 74.98s
-[21:36:21] ⚠️  INCOMPLETE: 7 batches remaining
-[21:36:21] Next run: ?task=8&start_from=76
+[18:45:45] ========== FULL SYNC COMPLETE ==========
+[18:45:45] Total duration: 10.49s
+[18:45:45] Status: COMPLETED WITH ERRORS

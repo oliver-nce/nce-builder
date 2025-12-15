@@ -1,11 +1,12 @@
 <?php
+// LAST UPDATED: 2025-12-07 18:08:00
 /**
  * Plugin Name: Multi-Table Editor API
  * Description: REST API endpoints for CRUD operations on configurable tables
  * Version: 2.0.0
- */ 
+ */   
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) exit; 
 
 add_action('rest_api_init', function() {
     $namespace = 'table-editor/v1';
@@ -15,10 +16,10 @@ add_action('rest_api_init', function() {
         'methods' => 'GET',
         'callback' => 'te_debug_columns',
         'permission_callback' => '__return_true',  // Keep public for debugging
-    ]);
-    
+    ]); 
+     
     // === TABLE MANAGEMENT ===
-    
+     
     // Get list of available tables
     register_rest_route($namespace, '/tables', [
         'methods' => 'GET',
@@ -125,6 +126,20 @@ add_action('rest_api_init', function() {
     register_rest_route($namespace, '/lookup/(?P<table>[a-zA-Z0-9_]+)', [
         'methods' => 'GET',
         'callback' => 'te_get_lookup_options',
+        'permission_callback' => 'te_check_permission',
+    ]);
+    
+    // Get available portals for a table
+    register_rest_route($namespace, '/portals', [
+        'methods' => 'GET',
+        'callback' => 'te_get_available_portals',
+        'permission_callback' => 'te_check_permission',
+    ]);
+    
+    // Get portal data (records from a portal)
+    register_rest_route($namespace, '/portal-data', [
+        'methods' => 'GET',
+        'callback' => 'te_get_portal_data',
         'permission_callback' => 'te_check_permission',
     ]);
 });
@@ -1415,6 +1430,227 @@ function te_get_lookup_options(WP_REST_Request $request) {
     return new WP_REST_Response([
         'success' => true,
         'options' => $options,
+    ], 200);
+}
+
+/**
+ * Get available portals for a table
+ */
+function te_get_available_portals(WP_REST_Request $request) {
+    global $wpdb;
+    
+    $table = $request->get_param('table');
+    
+    if (!$table) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Table parameter required',
+        ], 400);
+    }
+    
+    // Get all views for this table
+    $views = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT id FROM wp_zoho_table_editors WHERE target_table = %s",
+            $table
+        )
+    );
+    
+    if (empty($views)) {
+        return new WP_REST_Response([
+            'success' => true,
+            'portals' => [],
+        ], 200);
+    }
+    
+    $view_ids = array_map(function($v) { return $v->id; }, $views);
+    $placeholders = implode(',', array_fill(0, count($view_ids), '%d'));
+    
+    // Get all enabled portals for these views
+    $sql = "SELECT id, portal_name, display_order 
+            FROM wp_zoho_editor_subselects 
+            WHERE parent_view_id IN ($placeholders) 
+            AND enabled = 1 
+            ORDER BY display_order ASC";
+    
+    $portals = $wpdb->get_results(
+        $wpdb->prepare($sql, ...$view_ids),
+        ARRAY_A
+    );
+    
+    return new WP_REST_Response([
+        'success' => true,
+        'portals' => $portals,
+    ], 200);
+}
+
+/**
+ * Get portal data - fetch records for a portal with WHERE clause substitution
+ */
+function te_get_portal_data(WP_REST_Request $request) {
+    global $wpdb;
+    
+    $portal_id = intval($request->get_param('portal_id'));
+    $parent_pk_value = $request->get_param('parent_pk_value');
+    $parent_table = $request->get_param('parent_table');
+    
+    if (!$portal_id || !$parent_pk_value || !$parent_table) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Missing required parameters: portal_id, parent_pk_value, parent_table',
+        ], 400);
+    }
+    
+    // Get the portal configuration
+    $portal = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM wp_zoho_editor_subselects WHERE id = %d AND enabled = 1",
+            $portal_id
+        ),
+        ARRAY_A
+    );
+    
+    if (!$portal) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Portal not found or disabled',
+        ], 404);
+    }
+    
+    // Get the reference view (to get target_table and column settings)
+    $reference_view = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM wp_zoho_table_editors WHERE id = %d",
+            $portal['reference_view_id']
+        ),
+        ARRAY_A
+    );
+    
+    if (!$reference_view) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Reference view not found',
+        ], 404);
+    }
+    
+    $reference_table = $reference_view['target_table'];
+    
+    // Get parent record data for WHERE clause substitution
+    $parent_pk = te_get_primary_key($parent_table);
+    if (!$parent_pk) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Could not determine parent table primary key',
+        ], 500);
+    }
+    
+    $parent_record = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT * FROM `{$parent_table}` WHERE `{$parent_pk}` = %s LIMIT 1",
+            $parent_pk_value
+        ),
+        ARRAY_A
+    );
+    
+    if (!$parent_record) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Parent record not found',
+        ], 404);
+    }
+    
+    // Substitute parent table references in WHERE clause
+    // Supports two formats:
+    // 1. {parent.column} placeholder syntax
+    // 2. parent_table.column SQL syntax (auto-detected)
+    $where_clause = $portal['where_clause'];
+    
+    foreach ($parent_record as $col => $val) {
+        // Format 1: {parent.column} placeholders
+        $placeholder = '{parent.' . $col . '}';
+        $escaped_val = esc_sql($val);
+        $where_clause = str_replace($placeholder, "'" . $escaped_val . "'", $where_clause);
+        
+        // Format 2: parent_table.column references (e.g., wp_zoho_product_eligibility.wp_id)
+        $table_col_ref = $parent_table . '.' . $col;
+        $where_clause = str_replace($table_col_ref, "'" . $escaped_val . "'", $where_clause);
+    }
+    
+    // Validate no unresolved {parent.} placeholders remain
+    if (preg_match('/\{parent\.[^}]+\}/', $where_clause)) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'WHERE clause contains unresolved placeholders',
+        ], 400);
+    }
+    
+    // Get pagination params (per_page from request overrides portal config)
+    $page = max(1, intval($request->get_param('page') ?: 1));
+    $per_page_param = $request->get_param('per_page');
+    $per_page = $per_page_param ? min(500, intval($per_page_param)) : (intval($portal['rows_per_page']) ?: 10);
+    $offset = ($page - 1) * $per_page;
+    
+    // Get sort params from portal config
+    $order_by = $portal['default_sort_column'] ?: te_get_primary_key($reference_table) ?: 'id';
+    $order = strtoupper($portal['default_sort_direction']) === 'DESC' ? 'DESC' : 'ASC';
+    
+    // Also apply reference view's filter if it exists
+    $view_filter = $reference_view['filter'] ?? '';
+    $combined_filter = $where_clause;
+    if ($view_filter) {
+        $combined_filter = "({$where_clause}) AND ({$view_filter})";
+    }
+    
+    // Get total count
+    $count_sql = "SELECT COUNT(*) FROM `{$reference_table}` WHERE {$combined_filter}";
+    $total = $wpdb->get_var($count_sql);
+    
+    if ($wpdb->last_error) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Database error (count): ' . $wpdb->last_error,
+            'sql' => $count_sql,
+        ], 500);
+    }
+    
+    // Get records
+    $records_sql = "SELECT * FROM `{$reference_table}` WHERE {$combined_filter} ORDER BY `{$order_by}` {$order} LIMIT {$per_page} OFFSET {$offset}";
+    $records = $wpdb->get_results($records_sql, ARRAY_A);
+    
+    if ($wpdb->last_error) {
+        return new WP_REST_Response([
+            'success' => false,
+            'message' => 'Database error (records): ' . $wpdb->last_error,
+            'sql' => $records_sql,
+        ], 500);
+    }
+    
+    // Get column definitions for the reference table
+    $columns_obj = te_get_column_definitions_for_table($reference_table);
+    $primary_key = te_get_primary_key($reference_table);
+    
+    // Convert columns object to array format: [{name: 'col1', type: 'int', ...}, ...]
+    $columns = [];
+    foreach ($columns_obj as $col_name => $col_def) {
+        $columns[] = array_merge(['name' => $col_name], $col_def);
+    }
+    
+    // Get column prefs from reference view if available
+    $column_prefs = null;
+    if (!empty($reference_view['column_prefs'])) {
+        $column_prefs = json_decode($reference_view['column_prefs'], true);
+    }
+    
+    return new WP_REST_Response([
+        'success' => true,
+        'portal_name' => $portal['portal_name'],
+        'reference_table' => $reference_table,
+        'records' => $records,
+        'columns' => $columns,
+        'column_prefs' => $column_prefs,
+        'primary_key' => $primary_key,
+        'total' => intval($total),
+        'rows_per_page' => intval($portal['rows_per_page']) ?: 10,
     ], 200);
 }
 
