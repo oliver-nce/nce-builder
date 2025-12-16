@@ -2,12 +2,19 @@
 declare(strict_types=1);
 
 /**
- * Klaviyo Upload Task - Task 12-2-25
+ * Klaviyo Upload Task - BULK VERSION (v1.1 - Updated 12-16-25)
  * 
- * Uploads database records to Klaviyo Data Source API in batches.
+ * Uploads database records to Klaviyo Data Source API in batches (450 records per request).
  * Complete self-contained task - handles setup, execution, logging, and cleanup.
  * 
- * @param array $params Parameters from REST request (optional, unused currently)
+ * FIXES:
+ * - Now supports job_name parameter
+ * - Looks up correct row in wp_klaviyo_globals by job_name
+ * - Updates correct timestamp field (last_run_datetime)
+ * - Updates starting_offset for resumable jobs
+ * 
+ * @param array $params Parameters from REST request:
+ *                      - job_name (required): Used to look up configuration in wp_klaviyo_globals
  * @return array Summary with progress or error details
  */
 if (!function_exists('klaviyo_write_objects')) {
@@ -17,12 +24,16 @@ if (!function_exists('klaviyo_write_objects')) {
         @ini_set('memory_limit', '512M');
         @set_time_limit(1800);
         
-        error_log('klaviyo_write_objects: Function started. Memory limit: ' . ini_get('memory_limit'));
+        // Extract job_name parameter
+        $jobName = isset($params['job_name']) ? trim((string)$params['job_name']) : 'family_members';
         
-        // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] JOB STARTED\n", FILE_APPEND);
+        error_log("klaviyo_write_objects: Function started. Job: {$jobName}, Memory limit: " . ini_get('memory_limit'));
+        
+        // Initialize temp log file with job name
+        $logs_dir = ABSPATH . 'wp-content/wp-custom-scripts/logs/';
+        if (!is_dir($logs_dir)) { @mkdir($logs_dir, 0755, true); }
+        $temp_log = $logs_dir . 'task1_write_objects_' . date('Y-m-d_H-i-s') . '.log';
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] JOB STARTED (BULK) - Job: {$jobName}\n");
         
         global $wpdb;
         
@@ -30,15 +41,24 @@ if (!function_exists('klaviyo_write_objects')) {
         $wpdb->query('SET autocommit = 1');
         error_log("klaviyo_write_objects: Enabled autocommit for real-time write visibility");
         
-        // --- 1. Read configuration from database ---
-        $g = nce_get_latest_globals();
+        // --- 1. Read configuration from database BY JOB NAME ---
+        $table = $wpdb->prefix . 'klaviyo_globals';
+        $g = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE job_name = %s LIMIT 1",
+            $jobName
+        ), ARRAY_A);
+        
         if (!$g) {
-            return ['error' => 'No globals row found in wp_klaviyo_globals'];
+            return [
+                'error' => "No configuration found in wp_klaviyo_globals for job_name: {$jobName}",
+                'job_name' => $jobName
+            ];
         }
         
         $apiKey         = trim((string)($g['api_key'] ?? ''));
         $apiVersion     = trim((string)($g['api_version'] ?? '2025-10-15'));
         $dsId           = trim((string)($g['object_ds_id'] ?? ''));
+        $dsName         = trim((string)($g['object_ds_name'] ?? ''));
         $queryString    = trim((string)($g['query'] ?? ''));
         $batchSize      = 450;
         $batchLimit     = isset($g['batch_limit']) && $g['batch_limit'] !== null ? (int)$g['batch_limit'] : 0;
@@ -67,15 +87,15 @@ if (!function_exists('klaviyo_write_objects')) {
         $endpoint = 'https://a.klaviyo.com/api/data-source-record-bulk-create-jobs';
 
         // Clear previous result and first_batch_payload before starting new run
-        $table = $wpdb->prefix . 'klaviyo_globals';
-        $jobStartTime = current_time('mysql');
+        // $table already defined above
+        $jobStartTime = current_time('mysql', true);
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET last_run_date_time = %s WHERE id = %d",
+            "UPDATE {$table} SET last_run_datetime = %s WHERE id = %d",
             $jobStartTime,
             $globalsId
         ));
         $wpdb->query('COMMIT');
-        error_log("klaviyo_write_objects: Set last_run_date_time={$jobStartTime} for globals ID {$globalsId}");
+        error_log("klaviyo_write_objects: Set last_run_datetime={$jobStartTime} for job {$jobName}");
         $affected = $wpdb->query($wpdb->prepare(
             "UPDATE {$table} SET last_result = %s, first_batch_payload = NULL WHERE id = %d",
             "Cron job has started\n",
@@ -121,6 +141,8 @@ if (!function_exists('klaviyo_write_objects')) {
         $limitTriggered = false;
         
         // Log configuration
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded for job: {$jobName}\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Mode: BULK (450 records per batch)\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch size: {$batchSize} records per batch\n", FILE_APPEND);
         error_log("klaviyo_write_objects: Using batch size: {$batchSize}");
         if ($batchLimit > 0) {
@@ -349,7 +371,10 @@ if (!function_exists('klaviyo_write_objects')) {
                 ));
                 $wpdb->query('COMMIT'); // Commit immediately for real-time visibility
                 
-                return ['error' => 'Job failed - see last_result field for details'];
+                return [
+                    'error' => 'Job failed - see last_result field for details',
+                    'job_name' => $jobName
+                ];
             }
             
             $uploaded += $uploadedThisBatch;
@@ -373,10 +398,15 @@ if (!function_exists('klaviyo_write_objects')) {
         }
         
         // --- 6. Job completed - append summary to last_result ---
-        $completionMsg = "[" . date('H:i:s') . "] --- JOB COMPLETE ---\n";
+        $completionMsg = "[" . date('H:i:s') . "] --- JOB COMPLETE (BULK) ---\n";
+        $completionMsg .= "[" . date('H:i:s') . "] Job: {$jobName}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total batches: {$batches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total uploaded: {$uploaded}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Final delay: {$delaySeconds}s\n";
+        if ($dsId !== '') {
+            $dsLine = $dsName !== '' ? "Data source: {$dsName} ({$dsId})" : "Data source ID: {$dsId}";
+            $completionMsg .= "[" . date('H:i:s') . "] {$dsLine}\n";
+        }
         
         $nextStartingOffset = $ranOutOfRows ? 0 : $offset;
         nce_update_starting_offset($globalsId, $nextStartingOffset);
@@ -395,25 +425,19 @@ if (!function_exists('klaviyo_write_objects')) {
         ));
         $wpdb->query('COMMIT'); // Final commit for completion message
         
-        return ['success' => true, 'message' => 'Job completed - see last_result field for details'];
+        return [
+            'success' => true,
+            'message' => 'Job completed (bulk) - see last_result field for details',
+            'job_name' => $jobName,
+            'batches' => $batches,
+            'uploaded' => $uploaded
+        ];
     }
 }
 
 /* ============================================================
  * Helper Functions (used by klaviyo_write_objects)
  * ============================================================ */
-
-/**
- * Get latest globals record from database
- */
-if (!function_exists('nce_get_latest_globals')) {
-    function nce_get_latest_globals(): ?array {
-        global $wpdb;
-        $table = $wpdb->prefix . 'klaviyo_globals';
-        $row = $wpdb->get_row("SELECT * FROM {$table} ORDER BY id DESC LIMIT 1", ARRAY_A);
-        return $row ?: null;
-    }
-}
 
 /**
  * Build paginated SQL query

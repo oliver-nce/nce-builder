@@ -1,15 +1,15 @@
 <?php
-// LAST UPDATED: 2025-12-14
-// v1.3.0 - Added on/off toggles for each task
+// LAST UPDATED: 2025-12-15
+// v1.5.0 - Updated Task 3 to use two-step profile upsert (email match only + consent)
 declare(strict_types=1);
 
 // ============================================
 // TASK TOGGLES - Set to false to disable
 // ============================================
-define('NCE_SYNC_TASK_3_ENABLED', true);   // Bulk Upsert Profiles
+define('NCE_SYNC_TASK_3_ENABLED', true);   // Two-Step Upsert Profiles (Email Match + Consent)
 define('NCE_SYNC_TASK_1_ENABLED', true);   // Upload family_members
-define('NCE_SYNC_TASK_4_ENABLED', false);  // Grant Email Consent (DISABLED)
-define('NCE_SYNC_TASK_5_ENABLED', false);  // Grant SMS Consent (DISABLED)
+define('NCE_SYNC_TASK_4_ENABLED', false);  // Grant Email Consent (DISABLED - Task 3 handles this)
+define('NCE_SYNC_TASK_5_ENABLED', false);  // Grant SMS Consent (DISABLED - Task 3 handles this)
 define('NCE_SYNC_TASK_1B_ENABLED', true);  // Upload enrollment
 define('NCE_SYNC_TASK_10_ENABLED', true);  // Send Enrollment Events
 // ============================================
@@ -18,16 +18,16 @@ define('NCE_SYNC_TASK_10_ENABLED', true);  // Send Enrollment Events
  * Run Full Sync - Task 9
  * ---
  * Orchestrates running multiple tasks in sequence:
- *   1. Task 3: Bulk upsert profiles from database
+ *   1. Task 3: Two-step upsert profiles (email match only + consent for NEW profiles)
  *   2. Task 1: Upload data to Klaviyo (optimized) - family_members
- *   3. Task 4: Grant email consent for new profiles
- *   4. Task 5: Grant SMS consent for new profiles
+ *   3. Task 4: Grant email consent (DISABLED - handled by Task 3)
+ *   4. Task 5: Grant SMS consent (DISABLED - handled by Task 3)
  *   5. Task 1b: Upload data to Klaviyo (optimized) - enrollment
+ *   6. Task 10: Send enrollment events
  * 
  * @param array $params Parameters from REST request:
  *                      - job_name (optional): defaults to 'default'
- *                      - profiles_job_name (optional): overrides Task 3 job (defaults to 'profiles')
- *                      - lookback_hours (optional): defaults to 14 hours (for tasks 3, 4, 5)
+ *                      - lookback_hours (optional): defaults to 14 hours (legacy param, not used by Task 3)
  *                      - skip_tasks (optional): comma-separated task numbers to skip (e.g., "1,5")
  * @return array Summary with results from all tasks
  */
@@ -48,13 +48,16 @@ if (!function_exists('nce_task_run_full_sync')) {
         
         error_log("nce_task_run_full_sync: Starting full sync (Job: {$jobName})");
         
-        // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] ========== FULL SYNC STARTED ==========\n", FILE_APPEND);
+        // Initialize log file with timestamp
+        $logs_dir = ABSPATH . 'wp-content/wp-custom-scripts/logs/';
+        if (!is_dir($logs_dir)) {
+            @mkdir($logs_dir, 0755, true);
+        }
+        $temp_log = $logs_dir . 'task9_run_full_sync_' . date('Y-m-d_H-i-s') . '.log';
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] ========== FULL SYNC STARTED ==========\n");
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Job: {$jobName}\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Profiles job: profiles\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback hours: {$lookbackHours}\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback hours: {$lookbackHours} (legacy param, not used by Task 3)\n", FILE_APPEND);
         if (!empty($skipTasks)) {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Skipping tasks: " . implode(', ', $skipTasks) . "\n", FILE_APPEND);
         }
@@ -69,16 +72,16 @@ if (!function_exists('nce_task_run_full_sync')) {
         // 'enabled' uses constants defined at top of file for easy toggling
         $taskSequence = [
             3 => [
-                'name' => 'Bulk Upsert Profiles',
-                'file' => 'nce-runner-task-3/bulk_upsert_profiles.php',
-                'function' => 'nce_task_upsert_klaviyo_profiles',
-                'params' => ['job_name' => 'profiles', 'lookback_hours' => $lookbackHours, 'skip_log_clear' => true],
+                'name' => 'Two-Step Upsert Profiles (Email Match Only)',
+                'file' => 'nce-runner-task-3/upsert_profiles_two_step.php',
+                'function' => 'nce_task_upsert_klaviyo_profiles_two_step',
+                'params' => ['job_name' => 'profiles'],
                 'enabled' => NCE_SYNC_TASK_3_ENABLED
             ],
             1 => [
-                'name' => 'Upload Data to Klaviyo',
-                'file' => 'nce-runner-task-1/klaviyo_write_objects_optimized.php',
-                'function' => 'klaviyo_write_objects_optimized',
+                'name' => 'Upload Data to Klaviyo (BULK)',
+                'file' => 'nce-runner-task-1/klaviyo_write_objects.php',
+                'function' => 'klaviyo_write_objects',
                 'params' => ['job_name' => 'family_members', 'skip_log_clear' => true],
                 'enabled' => NCE_SYNC_TASK_1_ENABLED
             ],
@@ -97,9 +100,9 @@ if (!function_exists('nce_task_run_full_sync')) {
                 'enabled' => NCE_SYNC_TASK_5_ENABLED
             ],
             '1b' => [
-                'name' => 'Upload Enrollment Data to Klaviyo',
-                'file' => 'nce-runner-task-1/klaviyo_write_objects_optimized.php',
-                'function' => 'klaviyo_write_objects_optimized',
+                'name' => 'Upload Enrollment Data to Klaviyo (BULK)',
+                'file' => 'nce-runner-task-1/klaviyo_write_objects.php',
+                'function' => 'klaviyo_write_objects',
                 'params' => ['job_name' => 'enrollment', 'skip_log_clear' => true],
                 'enabled' => NCE_SYNC_TASK_1B_ENABLED
             ],

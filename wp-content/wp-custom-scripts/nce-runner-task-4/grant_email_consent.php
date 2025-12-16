@@ -1,7 +1,10 @@
 <?php
-// LAST UPDATED: 2025-12-14
-// v5.0.0 - Fetch from segment "email-non-subscribed" (SpnQ4w), no consented_at
+// LAST UPDATED: 2025-12-15
+// v5.1.0 - Fetch from segment "email-non-subscribed" (SpnQ4w), no consented_at
 declare(strict_types=1);
+
+// Load logging helper
+require_once __DIR__ . '/../includes/nce_logging_helper.php';
 
 /**
  * Grant Email Marketing Consent - Task 4
@@ -31,12 +34,9 @@ if (!function_exists('nce_task_grant_email_consent')) {
         
         error_log("nce_task_grant_email_consent: Starting (Segment: {$segmentId}, Lookback: {$lookbackDays} days)");
         
-        // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        if (!$skipLogClear) {
-            file_put_contents($temp_log, "");
-        }
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT EMAIL CONSENT - Segment: {$segmentId}, Lookback: {$lookbackDays} days, Limit: {$limit}\n", FILE_APPEND);
+        // Initialize log file with timestamp using helper function
+        $temp_log = nce_init_log_file('task4_grant_email_consent');
+        nce_write_log($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT EMAIL CONSENT - Segment: {$segmentId}, Lookback: {$lookbackDays} days, Limit: {$limit}\n");
         
         global $wpdb;
         $startTime = microtime(true);
@@ -59,7 +59,7 @@ if (!function_exists('nce_task_grant_email_consent')) {
             return ['error' => 'Missing api_key'];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded, API version: {$apiVersion}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Configuration loaded, API version: {$apiVersion}\n");
         
         // --- 2. Calculate cutoff (midnight UTC X days ago) ---
         // 0 days = today midnight UTC
@@ -67,10 +67,10 @@ if (!function_exists('nce_task_grant_email_consent')) {
         $utcMidnight = gmmktime(0, 0, 0); // Today midnight UTC
         $cutoffTimestamp = $utcMidnight - ($lookbackDays * 86400);
         $cutoff = gmdate('Y-m-d\TH:i:s\Z', $cutoffTimestamp);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Cutoff: {$cutoff} (profiles joined segment after this)\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Cutoff: {$cutoff} (profiles joined segment after this)\n");
         
         // --- 3. Fetch profiles from segment with joined_group_at filter ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching profiles from segment {$segmentId}...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching profiles from segment {$segmentId}...\n");
         
         $profiles = [];
         $segmentUrl = "https://a.klaviyo.com/api/segments/{$segmentId}/profiles?filter=greater-than(joined_group_at,{$cutoff})&fields[profile]=email&page[size]=100";
@@ -88,7 +88,7 @@ if (!function_exists('nce_task_grant_email_consent')) {
             ]);
             
             if (is_wp_error($res)) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR fetching segment: " . $res->get_error_message() . "\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR fetching segment: " . $res->get_error_message() . "\n");
                 break;
             }
             
@@ -96,7 +96,7 @@ if (!function_exists('nce_task_grant_email_consent')) {
             $body = json_decode(wp_remote_retrieve_body($res), true);
             
             if ($http < 200 || $http >= 300) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR HTTP {$http}: " . wp_remote_retrieve_body($res) . "\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR HTTP {$http}: " . wp_remote_retrieve_body($res) . "\n");
                 break;
             }
             
@@ -105,14 +105,14 @@ if (!function_exists('nce_task_grant_email_consent')) {
                     $e = $p['attributes']['email'] ?? null;
                     if ($e) $profiles[] = strtolower(trim($e));
                 }
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Page {$page}: " . count($body['data']) . " profiles\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Page {$page}: " . count($body['data']) . " profiles\n");
             }
             
             $segmentUrl = $body['links']['next'] ?? null;
         }
         
         $totalProfiles = count($profiles);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Total profiles from segment: {$totalProfiles}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Total profiles from segment: {$totalProfiles}\n");
         
         if ($totalProfiles === 0) {
             $duration = round(microtime(true) - $startTime, 2);
@@ -130,12 +130,12 @@ if (!function_exists('nce_task_grant_email_consent')) {
         // Apply limit
         if ($limit > 0 && $totalProfiles > $limit) {
             $profiles = array_slice($profiles, 0, $limit);
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Limited to {$limit} profile(s) for this run\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Limited to {$limit} profile(s) for this run\n");
         }
         $toProcess = count($profiles);
         
         // --- 4. Grant consent one at a time (no consented_at) ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Granting consent to {$toProcess} profile(s)...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Granting consent to {$toProcess} profile(s)...\n");
         
         $granted = 0;
         $failed = 0;
@@ -144,7 +144,7 @@ if (!function_exists('nce_task_grant_email_consent')) {
         foreach ($profiles as $index => $email) {
             // Log progress every 50
             if ($index > 0 && $index % 50 === 0) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Progress: {$index}/{$toProcess} (granted: {$granted}, failed: {$failed})\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Progress: {$index}/{$toProcess} (granted: {$granted}, failed: {$failed})\n");
             }
             
             $payload = [
@@ -190,11 +190,11 @@ if (!function_exists('nce_task_grant_email_consent')) {
             
             if ($http >= 200 && $http < 300) {
                 $granted++;
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Granted consent to: {$email}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✓ Granted consent to: {$email}\n");
             } else {
                 $failed++;
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ FAILED for {$email} - HTTP {$http}\n", FILE_APPEND);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Response: {$responseBody}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✗ FAILED for {$email} - HTTP {$http}\n");
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Response: {$responseBody}\n");
                 }
                 
             // Small delay to respect rate limits
@@ -215,7 +215,7 @@ if (!function_exists('nce_task_grant_email_consent')) {
         $completionMsg .= "[" . date('H:i:s') . "] Failed: {$failed}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Duration: {$duration}s\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        nce_write_log($temp_log, $completionMsg);
         
         return [
             'success' => true,

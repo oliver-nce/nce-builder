@@ -70,7 +70,7 @@ function nce_klaviyo_assert_identity($user_id, $trigger = 'unknown') {
     }
     
     $email = strtolower(trim($user->user_email));
-    $external_id = 'wp_user_' . $user_id;
+    $wp_user_id = (string)$user_id; // Store as custom property, not identifier
     
     // Get API credentials - check official Klaviyo plugin first, then custom table
     $api_key = null;
@@ -101,12 +101,15 @@ function nce_klaviyo_assert_identity($user_id, $trigger = 'unknown') {
     
     // Build minimal profile payload
     // This is an identity assertion only - profiles job will enrich with full data
+    // Match ONLY by email (no external_id to prevent duplicates)
     $payload = [
         'data' => [
             'type' => 'profile',
             'attributes' => [
                 'email' => $email,
-                'external_id' => $external_id,
+                'properties' => [
+                    'wp_user_id' => $wp_user_id  // Store as custom property, not identifier
+                ]
             ]
         ]
     ];

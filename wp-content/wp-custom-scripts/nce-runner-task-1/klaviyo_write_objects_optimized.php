@@ -2,14 +2,18 @@
 declare(strict_types=1);
 
 /**
- * Klaviyo Upload Task - OPTIMIZED VERSION 12-2-25 
+ * Klaviyo Upload Task - ONE-AT-A-TIME VERSION 12-15-25 (v2.6)
  * 
- * Optimizations over original version:
- * - No delays between batches (unless rate limited)
+ * Processing strategy:
+ * - LOADS FULL DATASET UPFRONT (avoids slow LIMIT/OFFSET on views)
+ * - Then processes ONE RECORD AT A TIME for detailed logging and error tracking
+ * - 55-second timeout: Stops gracefully to avoid WPE 60-second limit
+ * - Logs payload + response for first record only
+ * - ALWAYS logs payload + response for ANY failure (not just first 5)
+ * - Returns full log in browser response
  * - Only retries on HTTP 429 (rate limit)
  * - Better rate limit monitoring
- * - Less frequent database logging (every 10 batches vs every batch)
- * - Fixed 450-record batches for stable throughput
+ * - Less frequent database logging (every 10 records vs every record)
  * - Enhanced statistics and performance metrics
  * - Auto-creates data source if not present
  * 
@@ -32,12 +36,16 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         
         error_log("klaviyo_write_objects_optimized: Function started. Job: {$jobName}, Memory limit: " . ini_get('memory_limit'));
         
-        // Initialize temp log file (only clear if not called from full sync)
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        if (!$skipLogClear) {
-            file_put_contents($temp_log, ""); // Clear the file
+        // Initialize log file with timestamp
+        $logs_dir = __DIR__ . '/logs';
+        if (!is_dir($logs_dir)) {
+            if (!mkdir($logs_dir, 0755, true)) {
+                error_log("klaviyo_write_objects_optimized: Failed to create logs directory: {$logs_dir}");
+            }
         }
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] JOB STARTED (OPTIMIZED VERSION) - Job: {$jobName}\n", FILE_APPEND);
+        $timestamp = date('Y-m-d_H-i-s');
+        $temp_log = $logs_dir . "/task1_klaviyo_write_objects_optimized_{$timestamp}.log";
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] JOB STARTED (ONE-AT-A-TIME) - Job: {$jobName}\n", FILE_APPEND);
         
         global $wpdb;
         
@@ -66,7 +74,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         $dsName         = trim((string)($g['object_ds_name'] ?? '')); 
         $queryString    = trim((string)($g['query'] ?? ''));
         $onlyRunIf      = trim((string)($g['only_run_if'] ?? ''));
-        $batchSize      = 450;
+        $batchSize      = 1; // ONE RECORD AT A TIME
         $batchLimit     = isset($g['batch_limit']) && $g['batch_limit'] !== null ? (int)$g['batch_limit'] : 0;
         $startingOffset = isset($g['starting_offset']) && $g['starting_offset'] !== null ? (int)$g['starting_offset'] : 0;
         $controlParam2  = trim((string)($g['control_param_2'] ?? ''));
@@ -350,59 +358,104 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         
         // Log configuration
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded for job: {$jobName}\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch size: {$batchSize} records per batch\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch limit: " . ($batchLimit > 0 ? $batchLimit : '0 (no limit)') . "\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Mode: LOAD ALL DATA UPFRONT, then process ONE AT A TIME\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch size: {$batchSize} record per request\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Record limit: " . ($batchLimit > 0 ? $batchLimit : '0 (no limit)') . "\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Starting offset: {$startingOffset}\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] OPTIMIZATION: No delays between batches (async processing)\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Logging: Payload + Response for first record only\n", FILE_APPEND);
         
-        // --- 5. Main batch loop ---
+        // --- 5. FETCH ALL ROWS UPFRONT (avoids slow LIMIT/OFFSET on views) ---
+        $fetchStart = microtime(true);
+        $fetchSql = rtrim($baseSql, "; \t\n\r\0\x0B");
+        
+        // Apply batch limit and offset (LIMIT is required for OFFSET in MySQL)
+        if ($batchLimit > 0) {
+            if ($startingOffset > 0) {
+                $fetchSql .= " LIMIT {$batchLimit} OFFSET {$startingOffset}";
+            } else {
+                $fetchSql .= " LIMIT {$batchLimit}";
+            }
+        } elseif ($startingOffset > 0) {
+            // MySQL requires LIMIT with OFFSET - use a very high number to get "all remaining"
+            $fetchSql .= " LIMIT 18446744073709551615 OFFSET {$startingOffset}";
+        }
+        // If both are 0, don't add LIMIT/OFFSET - process all rows
+        
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching rows with SQL:\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "]   {$fetchSql}\n", FILE_APPEND);
+        $allRows = $wpdb->get_results($fetchSql, ARRAY_A);
+        $fetchDuration = round((microtime(true) - $fetchStart) * 1000, 2);
+        
+        // Handle SQL errors
+        if ($wpdb->last_error) {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] SQL ERROR - " . $wpdb->last_error . "\n", FILE_APPEND);
+            
+            return nce_finish_and_log([
+                'error'   => 'SQL error: ' . $wpdb->last_error,
+                'query'   => $fetchSql,
+            ], $globalsId);
+        }
+        
+        $totalRows = count($allRows);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Fetched {$totalRows} rows in {$fetchDuration}ms\n", FILE_APPEND);
+        error_log("klaviyo_write_objects_optimized: Fetched {$totalRows} rows in {$fetchDuration}ms");
+        
+        if ($totalRows === 0) {
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] No rows to process\n", FILE_APPEND);
+            $completionMsg = "[" . date('H:i:s') . "] --- JOB COMPLETE (NO ROWS) ---\n";
+            file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+            
+            $fullLog = [];
+            if (file_exists($temp_log)) {
+                $logContent = file_get_contents($temp_log);
+                $fullLog = array_filter(explode("\n", $logContent), fn($line) => trim($line) !== '');
+            }
+            
+            return [
+                'success' => true,
+                'message' => 'No rows to process',
+                'job_name' => $jobName,
+                'stats' => [
+                    'records_processed' => 0,
+                    'uploaded' => 0,
+                    'duration_seconds' => 0,
+                ],
+                'log_file' => $temp_log,
+                'full_log' => $fullLog
+            ];
+        }
+        
+        // --- 6. Process each row ONE AT A TIME ---
         $startTime = microtime(true);
+        $timedOut = false;
         
-        while (true) {
-            // Log progress every 10 batches (less frequent)
+        foreach ($allRows as $rowIndex => $row) {
+            // Check timeout (55 seconds to avoid WPE 60-second limit)
+            $elapsed = microtime(true) - $startTime;
+            if ($elapsed >= 55) {
+                $timedOut = true;
+                $timeoutMsg = "[" . date('H:i:s') . "] ⏱️  TIMEOUT: Stopping gracefully after " . round($elapsed, 1) . "s (processed {$batches} of {$totalRows} records)\n";
+                file_put_contents($temp_log, $timeoutMsg, FILE_APPEND);
+                error_log("klaviyo_write_objects_optimized: Timeout after " . round($elapsed, 1) . "s");
+                break;
+            }
+            
+            // Log progress every 10 records (less frequent)
             if ($batches > 0 && $batches % 10 === 0) {
                 $elapsed = round(microtime(true) - $startTime, 2);
                 $rate = $batches > 0 ? round($uploaded / $elapsed, 2) : 0;
-                error_log("klaviyo_write_objects_optimized: Batch {$batches}/{$batchLimit}, Uploaded: {$uploaded}, Rate: {$rate} records/sec, Memory: " . round(memory_get_usage() / 1024 / 1024, 2) . "MB");
+                error_log("klaviyo_write_objects_optimized: Record {$batches}/{$totalRows}, Uploaded: {$uploaded}, Rate: {$rate} records/sec, Memory: " . round(memory_get_usage() / 1024 / 1024, 2) . "MB");
             }
             
-            // Check batch limit
-            if ($batchLimit > 0 && $batches >= $batchLimit) {
-                error_log("klaviyo_write_objects_optimized: Batch limit reached ({$batchLimit})");
-                break;
-            }
-            
-            // Fetch next batch of rows
-            $sql  = nce_build_paged_sql($baseSql, $batchSize, $offset);
-            $rows = $wpdb->get_results($sql, ARRAY_A);
-            
-            // Handle SQL errors
-            if ($wpdb->last_error) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] SQL ERROR - " . $wpdb->last_error . "\n", FILE_APPEND);
-                
-                return nce_finish_and_log([
-                    'error'   => 'SQL error: ' . $wpdb->last_error,
-                    'offset'  => $offset,
-                    'batches' => $batches,
-                    'uploaded' => $uploaded,
-                ], $globalsId);
-            }
-            
-            // No more rows - done
-            if (empty($rows)) {
-                break;
-            }
-            
-            // Build payload for bulk create job endpoint
-            $records = [];
-            foreach ($rows as $row) {
-                $records[] = [
+            // Build payload for bulk create job endpoint (single record)
+            $records = [
+                [
                     'type' => 'data-source-record',
                     'attributes' => [
                         'record' => $row,
                     ],
-                ];
-            }
+                ]
+            ];
             
             // Build payload
             $payload = [
@@ -424,17 +477,10 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 ],
             ];
             
-            // Log first batch payload for debugging
-            if ($batches === 0) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] First batch payload sample:\n", FILE_APPEND);
-                file_put_contents($temp_log, "  Job Name: {$jobName}\n", FILE_APPEND);
-                file_put_contents($temp_log, "  Data Source ID: {$dsId}\n", FILE_APPEND);
-                file_put_contents($temp_log, "  Endpoint: {$endpoint}\n", FILE_APPEND);
-                file_put_contents($temp_log, "  Batch Size: {$batchSize} records\n", FILE_APPEND);
-                file_put_contents($temp_log, "  Records in this batch: " . count($records) . "\n", FILE_APPEND);
-                if (!empty($records[0])) {
-                    file_put_contents($temp_log, "  Sample record keys: " . implode(', ', array_keys($records[0]['attributes']['record'])) . "\n", FILE_APPEND);
-                }
+            // Log payload for first record only
+            $logPayloadResponse = ($batches < 1);
+            if ($logPayloadResponse) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] 📥 Record " . ($batches + 1) . " Payload: " . json_encode($payload) . "\n", FILE_APPEND);
             }
             
             // Send to Klaviyo with SIMPLIFIED retry logic (only for 429)
@@ -476,6 +522,17 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 break;
             } 
             
+            // Log response for first 5 records
+            if ($logPayloadResponse) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] 📤 Record " . ($batches + 1) . " Response (HTTP {$resp['http']}): " . json_encode($resp['body']) . "\n", FILE_APPEND);
+            }
+            
+            // ALWAYS log payload/response for failures
+            if (($resp['http'] < 200 || $resp['http'] >= 300 || $resp['error']) && !$logPayloadResponse) {
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] 📥 Record " . ($batches + 1) . " Payload (FAILURE): " . json_encode($payload) . "\n", FILE_APPEND);
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] 📤 Record " . ($batches + 1) . " Response (FAILURE - HTTP {$resp['http']}): " . json_encode($resp['body']) . "\n", FILE_APPEND);
+            }
+            
             $batches++;
             
             // Determine status and uploaded count
@@ -500,10 +557,9 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             
             // Build log line with rate limit info
             $logLine = sprintf(
-                "[%s] Batch %03d | Records: %d | HTTP: %d | Status: %s | RateLimit: %s/%s (remaining) | Memory: %.1fMB | ReqID: %s\n",
+                "[%s] Record %03d | HTTP: %d | Status: %s | RateLimit: %s/%s | Memory: %.1fMB | ReqID: %s\n",
                 date('H:i:s'),
                 $batches,
-                count($records),
                 $resp['http'],
                 $status,
                 $rateLimitInfo['remaining'] ?? '?',
@@ -515,7 +571,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             // Write to temp_log
             file_put_contents($temp_log, $logLine, FILE_APPEND);
             
-            // Append to database ONLY every 10 batches (less frequent)
+            // Append to database ONLY every 10 records (less frequent)
             if ($batches % 10 === 0 || $status === 'FAILED') {
                 $wpdb->query($wpdb->prepare(
                     "UPDATE {$table} SET last_result = CONCAT(COALESCE(last_result, ''), %s) WHERE id = %d",
@@ -525,7 +581,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 $wpdb->query('COMMIT');
             }
             
-            // Save first batch payload to first_batch_payload field
+            // Save first record payload to first_batch_payload field
             if ($batches === 1) {
                 $payloadJson = wp_json_encode($payload, JSON_PRETTY_PRINT);
                 $wpdb->query($wpdb->prepare(
@@ -534,7 +590,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                     $globalsId
                 ));
                 $wpdb->query('COMMIT');
-                error_log("klaviyo_write_objects_optimized: Saved first batch payload to database");
+                error_log("klaviyo_write_objects_optimized: Saved first record payload to database");
             }
             
             // Stop on failure (after retries exhausted)
@@ -551,32 +607,37 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 ));
                 $wpdb->query('COMMIT');
                 
+                // Read full log for failure response (as array for readability)
+                $fullLog = [];
+                if (file_exists($temp_log)) {
+                    $logContent = file_get_contents($temp_log);
+                    $fullLog = array_filter(explode("\n", $logContent), fn($line) => trim($line) !== '');
+                }
+                
                 return [
                     'error' => 'Job failed - see last_result field for details',
-                    'job_name' => $jobName
+                    'job_name' => $jobName,
+                    'log_file' => $temp_log,
+                    'full_log' => $fullLog
                 ];
             }
             
             $uploaded += $uploadedThisBatch;
-            $offset   += $batchSize;
             
             // NO SLEEP HERE - let Klaviyo handle async processing
             // Only slept if we were rate limited (handled in retry loop above)
-            
-            if ($batchLimit > 0 && $batches >= $batchLimit) {
-                $limitMsg = "[" . date('H:i:s') . "] Batch limit reached ({$batchLimit})\n";
-                file_put_contents($temp_log, $limitMsg, FILE_APPEND);
-                break;
-            }
-        }
+        } // End foreach loop
         
         // --- 6. Job completed - append summary to last_result ---
         $endTime = microtime(true);
         $totalTime = round($endTime - $startTime, 2);
         $avgRate = $totalTime > 0 ? round($uploaded / $totalTime, 2) : 0;
         
-        $completionMsg = "[" . date('H:i:s') . "] --- JOB COMPLETE (OPTIMIZED) ---\n";
-        $completionMsg .= "[" . date('H:i:s') . "] Total batches: {$batches}\n";
+        $completionMsg = "[" . date('H:i:s') . "] --- JOB " . ($timedOut ? "STOPPED (TIMEOUT)" : "COMPLETE") . " (ONE-AT-A-TIME) ---\n";
+        if ($timedOut) {
+            $completionMsg .= "[" . date('H:i:s') . "] ⏱️  Stopped after {$totalTime}s to avoid WPE 60-second timeout\n";
+        }
+        $completionMsg .= "[" . date('H:i:s') . "] Total records processed: {$batches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total uploaded: {$uploaded}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Total time: {$totalTime}s\n";
         $completionMsg .= "[" . date('H:i:s') . "] Average rate: {$avgRate} records/sec\n";
@@ -599,8 +660,10 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
         
         // --- Bulk mode: increment starting_offset instead of updating last_run_datetime ---
         $bulkModeInfo = null;
-        if ($bulkMode && $uploaded > 0) {
-            $newOffset = $startingOffset + $uploaded;
+        if ($bulkMode && $batches > 0) {
+            // Use $batches (rows processed) instead of $uploaded (successful uploads)
+            // because offset should advance even if some failed
+            $newOffset = $startingOffset + $batches;
             $wpdb->query($wpdb->prepare(
                 "UPDATE {$table} SET starting_offset = %d WHERE id = %d",
                 $newOffset,
@@ -608,7 +671,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             ));
             $wpdb->query('COMMIT');
             
-            $bulkMsg = "[" . date('H:i:s') . "] BULK MODE: Incremented starting_offset from {$startingOffset} to {$newOffset} (+{$uploaded})\n";
+            $bulkMsg = "[" . date('H:i:s') . "] BULK MODE: Incremented starting_offset from {$startingOffset} to {$newOffset} (+{$batches})\n";
             file_put_contents($temp_log, $bulkMsg, FILE_APPEND);
             error_log("klaviyo_write_objects_optimized: BULK MODE - starting_offset updated: {$startingOffset} -> {$newOffset}");
             
@@ -616,7 +679,7 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
                 'enabled' => true,
                 'previous_offset' => $startingOffset,
                 'new_offset' => $newOffset,
-                'increment' => $uploaded
+                'increment' => $batches
             ];
         }
         
@@ -626,20 +689,33 @@ if (!function_exists('klaviyo_write_objects_optimized')) {
             'created_this_run' => $createdDataSource !== null,
         ];
         
+        // Read full log contents for browser response (as array for readability)
+        $fullLog = [];
+        if (file_exists($temp_log)) {
+            $logContent = file_get_contents($temp_log);
+            $fullLog = array_filter(explode("\n", $logContent), fn($line) => trim($line) !== '');
+        }
+        
+        // Log file location for debugging
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Log file: {$temp_log}\n", FILE_APPEND);
+        
         $result = [
             'success' => true, 
-            'message' => 'Job completed - see last_result field for details',
+            'message' => $timedOut ? 'Job stopped (timeout) - see last_result for details' : 'Job completed (one-at-a-time) - see last_result field for details',
             'job_name' => $jobName,
             'query' => $baseSql,
             'data_source' => $dataSourceInfo,
             'stats' => [
-                'batches' => $batches,
+                'records_processed' => $batches,
                 'uploaded' => $uploaded,
                 'duration_seconds' => $totalTime,
                 'avg_rate' => $avgRate,
                 'rate_limit_hits' => $rateLimitHits,
                 'total_retries' => $totalRetries,
-            ]
+            ],
+            'timed_out' => $timedOut,
+            'log_file' => $temp_log,
+            'full_log' => $fullLog
         ];
         
         // Add only_run_if info if it was executed

@@ -40,9 +40,10 @@ if (!function_exists('nce_task_process_cached_profiles')) {
         error_log("nce_task_process_cached_profiles: Starting v" . NCE_TASK_8_VERSION . " (Job: {$jobName}, Start: {$startFrom}, Max: {$maxBatches})");
         
         // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] PROCESS CACHED PROFILES - Job: {$jobName}\n", FILE_APPEND);
+        $logs_dir = ABSPATH . 'wp-content/wp-custom-scripts/logs/';
+        if (!is_dir($logs_dir)) { @mkdir($logs_dir, 0755, true); }
+        $temp_log = $logs_dir . 'task8_process_cached_' . date('Y-m-d_H-i-s') . '.log';
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] PROCESS CACHED PROFILES - Job: {$jobName}\n");
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Script version: " . NCE_TASK_8_VERSION . " (updated: " . NCE_TASK_8_UPDATED . ")\n", FILE_APPEND);
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch range: Starting from batch {$startFrom}, max {$maxBatches} batches this run\n", FILE_APPEND);
         

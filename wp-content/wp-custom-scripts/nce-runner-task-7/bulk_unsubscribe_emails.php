@@ -35,9 +35,10 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         error_log("nce_task_bulk_unsubscribe_emails: Starting (Job: {$jobName})");
         
         // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UNSUBSCRIBE EMAILS - Job: {$jobName}\n", FILE_APPEND);
+        $logs_dir = ABSPATH . 'wp-content/wp-custom-scripts/logs/';
+        if (!is_dir($logs_dir)) { @mkdir($logs_dir, 0755, true); }
+        $temp_log = $logs_dir . 'task7_unsubscribe_' . date('Y-m-d_H-i-s') . '.log';
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UNSUBSCRIBE EMAILS - Job: {$jobName}\n");
         
         global $wpdb;
         $startTime = microtime(true);

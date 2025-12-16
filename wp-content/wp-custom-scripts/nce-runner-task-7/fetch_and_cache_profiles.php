@@ -1,7 +1,10 @@
 <?php
-// LAST UPDATED: 2025-11-28 19:00:00
-// v3.0.0 - 2025-11-28 (Fetch & cache only - processing moved to Task 8)
+// LAST UPDATED: 2025-12-15
+// v3.1.0 - 2025-12-15 (Fetch & cache only - processing moved to Task 8, timestamped logs)
 declare(strict_types=1);
+
+// Load logging helper
+require_once __DIR__ . '/../includes/nce_logging_helper.php';
 
 // Version constant for tracking deployed code
 define('NCE_TASK_7_VERSION', '3.0.0');
@@ -38,13 +41,12 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
         error_log("nce_task_fetch_and_cache_profiles: Starting v" . NCE_TASK_7_VERSION . " (Job: {$jobName}, Refresh: " . ($refresh ? 'YES' : 'NO') . ")");
         
         // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] FETCH & CACHE PROFILES - Job: {$jobName}\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Script version: " . NCE_TASK_7_VERSION . " (updated: " . NCE_TASK_7_UPDATED . ")\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Mode: Fetch ALL profiles and cache to database\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] US phone validation: +1XXXXXXXXXX format only\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Refresh mode: " . ($refresh ? 'YES' : 'NO') . "\n", FILE_APPEND);
+        $temp_log = nce_init_log_file('task7_fetch_and_cache_profiles');
+        nce_write_log($temp_log, "[" . date('Y-m-d H:i:s') . "] FETCH & CACHE PROFILES - Job: {$jobName}\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Script version: " . NCE_TASK_7_VERSION . " (updated: " . NCE_TASK_7_UPDATED . ")\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Mode: Fetch ALL profiles and cache to database\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] US phone validation: +1XXXXXXXXXX format only\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Refresh mode: " . ($refresh ? 'YES' : 'NO') . "\n");
         
         global $wpdb;
         $startTime = microtime(true);
@@ -75,11 +77,11 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
             ];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n");
         
         // --- 2. Fetch ALL profiles at once ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching ALL profiles from Klaviyo (no limit)...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching ALL profiles from Klaviyo (no limit)...\n");
         
         $profilesResult = nce_fetch_all_profiles_with_phones($apiKey, $apiVersion, $temp_log);
         
@@ -94,10 +96,10 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
         $allProfiles = $profilesResult['profiles'];
         $totalFetched = count($allProfiles);
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetched {$totalFetched} total profiles from Klaviyo\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetched {$totalFetched} total profiles from Klaviyo\n");
         
         // --- 3. Filter for valid US phone numbers ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Filtering for valid US phone numbers...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Filtering for valid US phone numbers...\n");
         
         $validUSProfiles = array_filter($allProfiles, function($profile) {
             $phone = !empty($profile['phone_number']) ? trim($profile['phone_number']) : null;
@@ -121,8 +123,8 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
         $totalValidUS = count($validUSProfiles);
         $totalInvalid = $totalFetched - $totalValidUS;
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] {$totalValidUS} profiles have valid US phone numbers\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] {$totalInvalid} profiles filtered out (invalid/non-US)\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] {$totalValidUS} profiles have valid US phone numbers\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] {$totalInvalid} profiles filtered out (invalid/non-US)\n");
         
         if ($totalValidUS === 0) {
             return [
@@ -136,7 +138,7 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
         }
         
         // --- 4. Save to database control_param ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Saving {$totalValidUS} profiles to database cache...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Saving {$totalValidUS} profiles to database cache...\n");
         
         // Build cache data
         $cacheData = [
@@ -160,7 +162,7 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
         );
         
         if ($updated === false) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: Failed to save cache to database\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR: Failed to save cache to database\n");
             return [
                 'success' => false,
                 'error' => 'Failed to save profiles to database cache: ' . $wpdb->last_error,
@@ -169,7 +171,7 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
             ];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] ✅ Successfully cached {$totalValidUS} profiles\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] ✅ Successfully cached {$totalValidUS} profiles\n");
         
         // --- 5. Summary ---
         $endTime = microtime(true);
@@ -186,7 +188,7 @@ if (!function_exists('nce_task_fetch_and_cache_profiles')) {
         $completionMsg .= "[" . date('H:i:s') . "] Next step: Run Task 8 to process profiles\n";
         $completionMsg .= "[" . date('H:i:s') . "] Example: ?task=8&start_from=1\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        nce_write_log($temp_log, $completionMsg);
         error_log("nce_task_fetch_and_cache_profiles: Complete - {$totalValidUS} profiles cached");
         
         return [
@@ -221,7 +223,7 @@ if (!function_exists('nce_fetch_all_profiles_with_phones')) {
         $pageCount = 0;
         $maxPages = 100; // Allow up to 10K profiles (100 pages * 100 per page)
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching ALL profiles from Klaviyo (no limit)...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching ALL profiles from Klaviyo (no limit)...\n");
         
         while ($pageUrl && $pageCount < $maxPages) {
             $pageCount++;
@@ -237,7 +239,7 @@ if (!function_exists('nce_fetch_all_profiles_with_phones')) {
                 $fullUrl = $pageUrl;
             }
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching page {$pageCount}...\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching page {$pageCount}...\n");
             
             $args = [
                 'method'  => 'GET',
@@ -262,7 +264,7 @@ if (!function_exists('nce_fetch_all_profiles_with_phones')) {
                     $errorMsg .= ': ' . ($body['errors'][0]['detail'] ?? 'Unknown error');
                 }
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n");
                 return ['error' => $errorMsg];
             }
             
@@ -280,14 +282,14 @@ if (!function_exists('nce_fetch_all_profiles_with_phones')) {
                     }
                 }
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Page {$pageCount}: " . count($body['data']) . " profiles (" . count($allProfiles) . " with phone so far)\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Page {$pageCount}: " . count($body['data']) . " profiles (" . count($allProfiles) . " with phone so far)\n");
             }
             
             // Check for next page
             $pageUrl = $body['links']['next'] ?? null;
             
             if (!$pageUrl) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] No more pages, fetch complete\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] No more pages, fetch complete\n");
                 break;
             }
             
@@ -296,11 +298,11 @@ if (!function_exists('nce_fetch_all_profiles_with_phones')) {
         }
         
         if ($pageCount >= $maxPages) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: Reached max page limit ({$maxPages}), there may be more profiles\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] WARNING: Reached max page limit ({$maxPages}), there may be more profiles\n");
         }
         
         $totalCount = count($allProfiles);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetch complete: {$totalCount} profiles with phone_number ({$pageCount} pages)\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetch complete: {$totalCount} profiles with phone_number ({$pageCount} pages)\n");
         
         return ['profiles' => $allProfiles];
     }

@@ -1,7 +1,10 @@
 <?php
-// LAST UPDATED: 2025-12-14
-// v1.0.0 - Send new_enrollment events to Klaviyo
+// LAST UPDATED: 2025-12-15
+// v1.1.0 - Send new_enrollment events to Klaviyo, timestamped logs
 declare(strict_types=1);
+
+// Load logging helper
+require_once __DIR__ . '/../includes/nce_logging_helper.php';
 
 /**
  * 
@@ -37,12 +40,9 @@ if (!function_exists('nce_task_send_enrollment_events')) {
         
         error_log("nce_task_send_enrollment_events: Starting (Job: {$jobName})");
         
-        // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        if (!$skipLogClear) {
-            file_put_contents($temp_log, "");
-        }
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] SEND ENROLLMENT EVENTS - Task 10\n", FILE_APPEND);
+        // Initialize log file with timestamp using helper function
+        $temp_log = nce_init_log_file('task10_send_enrollment_events');
+        nce_write_log($temp_log, "[" . date('Y-m-d H:i:s') . "] SEND ENROLLMENT EVENTS - Task 10\n");
         
         global $wpdb;
         $startTime = microtime(true);
@@ -68,8 +68,8 @@ if (!function_exists('nce_task_send_enrollment_events')) {
             return ['error' => 'Missing api_key in configuration', 'job_name' => $jobName];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n");
         
         // --- 2. Fetch orders that need events sent ---
         $ordersTable = $wpdb->prefix . 'zoho_orders';
@@ -85,7 +85,7 @@ if (!function_exists('nce_task_send_enrollment_events')) {
         $orders = $wpdb->get_results($query, ARRAY_A);
         
         if ($wpdb->last_error) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] SQL ERROR: " . $wpdb->last_error . "\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] SQL ERROR: " . $wpdb->last_error . "\n");
             return [
                 'error' => 'SQL error: ' . $wpdb->last_error,
                 'job_name' => $jobName
@@ -93,7 +93,7 @@ if (!function_exists('nce_task_send_enrollment_events')) {
         }
         
         $totalOrders = count($orders);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalOrders} orders needing events\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Found {$totalOrders} orders needing events\n");
         
         if ($totalOrders === 0) {
             return [
@@ -111,13 +111,13 @@ if (!function_exists('nce_task_send_enrollment_events')) {
         $failedCount = 0;
         $errors = [];
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize}\n");
         
         foreach ($batches as $batchIndex => $batchOrders) {
             $batchNum = $batchIndex + 1;
             $batchCount = count($batchOrders);
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}/{$totalBatches} ({$batchCount} orders)...\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}/{$totalBatches} ({$batchCount} orders)...\n");
             
             // Build events array for bulk create
             $events = [];
@@ -133,7 +133,7 @@ if (!function_exists('nce_task_send_enrollment_events')) {
                 
                 // Skip if no email (can't send event without profile identifier)
                 if (empty($email)) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "]   Skipping order {$orderId}/{$orderItemId} - no email\n", FILE_APPEND);
+                    nce_write_log($temp_log, "[" . date('H:i:s') . "]   Skipping order {$orderId}/{$orderItemId} - no email\n");
                     $failedCount++;
                     continue;
                 }
@@ -174,14 +174,14 @@ if (!function_exists('nce_task_send_enrollment_events')) {
             }
             
             if (empty($events)) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "]   No valid events in batch\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "]   No valid events in batch\n");
                 continue;
             }
             
             // Log sample from first batch
             if ($batchNum === 1 && !empty($events)) {
                 $sampleEvent = json_encode($events[0], JSON_PRETTY_PRINT);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample event:\n{$sampleEvent}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Sample event:\n{$sampleEvent}\n");
             }
             
             // Send events to Klaviyo (one at a time for now - bulk events API has different format)
@@ -232,7 +232,7 @@ if (!function_exists('nce_task_send_enrollment_events')) {
             $sentCount += $batchSent;
             $failedCount += $batchFailed;
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "]   Sent: {$batchSent}, Failed: {$batchFailed}\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "]   Sent: {$batchSent}, Failed: {$batchFailed}\n");
             
             // Pause between batches
             if ($batchNum < $totalBatches) {
@@ -250,7 +250,7 @@ if (!function_exists('nce_task_send_enrollment_events')) {
         $completionMsg .= "[" . date('H:i:s') . "] Failed: {$failedCount}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Duration: {$duration}s\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        nce_write_log($temp_log, $completionMsg);
         error_log("nce_task_send_enrollment_events: Complete - Sent: {$sentCount}, Failed: {$failedCount}");
         
         $result = [

@@ -1,6 +1,6 @@
 <?php
-// LAST UPDATED: 2025-12-03
-// v2.3.0 - 2025-12-03 (Added Task 9: Full sync orchestrator)
+// LAST UPDATED: 2025-12-15
+// v2.4.0 - 2025-12-15 (Updated Task 3 to use two-step profile upsert)
 /**
  * NCE Runner Task Manager
  * 
@@ -29,9 +29,9 @@ function nce_run_task(array $params): array {
     $task_registry = [
         1 => [
             'folder'   => 'nce-runner-task-1',
-            'file'     => 'klaviyo_write_objects_optimized.php',
-            'function' => 'klaviyo_write_objects_optimized',
-            'description' => 'Upload data to Klaviyo (optimized, job_name=family_members)'
+            'file'     => 'klaviyo_write_objects.php',
+            'function' => 'klaviyo_write_objects',
+            'description' => 'Upload data to Klaviyo (BULK mode, 450 records/batch)'
         ],
         2 => [
             'folder'   => 'nce-runner-task-2',
@@ -39,11 +39,17 @@ function nce_run_task(array $params): array {
             'function' => 'nce_task_delete_all_data_sources',
             'description' => 'Delete all Klaviyo data sources'
         ],
+        '2b' => [
+            'folder'   => 'nce-runner-task-2',
+            'file'     => 'delete_data_sources_by_name.php',
+            'function' => 'nce_task_delete_data_sources_by_name',
+            'description' => 'Delete specific Klaviyo data sources by name'
+        ],
         3 => [
             'folder'   => 'nce-runner-task-3',
-            'file'     => 'bulk_upsert_profiles.php',
-            'function' => 'nce_task_upsert_klaviyo_profiles',
-            'description' => 'Bulk upsert Klaviyo profiles from database'
+            'file'     => 'upsert_profiles_two_step.php',
+            'function' => 'nce_task_upsert_klaviyo_profiles_two_step',
+            'description' => 'Two-step profile upsert (email match only, phone by ID, consent by ID)'
         ],
         4 => [
             'folder'   => 'nce-runner-task-4',
@@ -89,14 +95,12 @@ function nce_run_task(array $params): array {
         ],
     ];
     
-    // Validate task number
-    if ($task_num < 1 || $task_num > 10) {
+    // Validate task number (check if exists in registry)
+    if (!isset($task_registry[$task_num])) {
         return [
-            'error' => 'Invalid task number. Must be between 1 and 10.',
+            'error' => 'Invalid task number. Task not found in registry.',
             'task' => $task_num,
-            'available_tasks' => array_filter(array_map(function($num, $config) {
-                return $config['function'] !== null ? $num : null;
-            }, array_keys($task_registry), $task_registry))
+            'available_tasks' => array_keys($task_registry)
         ];
     }
     

@@ -42,9 +42,10 @@ if (!function_exists('nce_task_grant_email_consent')) {
         error_log("nce_task_grant_email_consent: Starting (Job: {$jobName}, Lookback: {$lookbackHours}h)");
         
         // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT EMAIL CONSENT (NEW PROFILES) - Job: {$jobName}\n", FILE_APPEND);
+        $logs_dir = ABSPATH . 'wp-content/wp-custom-scripts/logs/';
+        if (!is_dir($logs_dir)) { @mkdir($logs_dir, 0755, true); }
+        $temp_log = $logs_dir . 'grant_email_consent_copy_' . date('Y-m-d_H-i-s') . '.log';
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT EMAIL CONSENT (NEW PROFILES) - Job: {$jobName}\n");
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback window: {$lookbackHours} hours\n", FILE_APPEND);
         
         global $wpdb;

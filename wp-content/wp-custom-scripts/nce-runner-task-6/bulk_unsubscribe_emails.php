@@ -1,5 +1,8 @@
-<?php // v1.0.0 - 2025-11-28
+<?php // v1.1.0 - 2025-12-15
 declare(strict_types=1);
+
+// Load logging helper
+require_once __DIR__ . '/../includes/nce_logging_helper.php';
 
 /**
  * Bulk Unsubscribe Email Profiles - Task 6
@@ -35,12 +38,11 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         
         error_log("nce_task_bulk_unsubscribe_emails: Starting (Job: {$jobName}, Dry Run: " . ($dryRun ? 'YES' : 'NO') . ")");
         
-        // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UNSUBSCRIBE EMAILS - Job: {$jobName}\n", FILE_APPEND);
+        // Initialize log file with timestamp using helper function
+        $temp_log = nce_init_log_file('task6_bulk_unsubscribe_emails');
+        nce_write_log($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UNSUBSCRIBE EMAILS - Job: {$jobName}\n");
         if ($dryRun) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] 🔍 DRY RUN MODE - Will only read and validate emails (no API calls)\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] 🔍 DRY RUN MODE - Will only read and validate emails (no API calls)\n");
         }
         
         global $wpdb;
@@ -67,14 +69,14 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
             return ['error' => 'Missing api_key in configuration', 'job_name' => $jobName];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n");
         
         // --- 2. Fetch suppressed emails from Klaviyo API ---
         $emailList = [];
         $sourceUsed = 'klaviyo_api';
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching suppressed emails from Klaviyo API...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching suppressed emails from Klaviyo API...\n");
         
         $suppressedEmails = nce_fetch_klaviyo_suppressed_profiles($apiKey, $apiVersion, $temp_log);
         
@@ -87,10 +89,10 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         }
         
         $emailList = $suppressedEmails['emails'];
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Retrieved {$suppressedEmails['count']} suppressed emails from Klaviyo\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Retrieved {$suppressedEmails['count']} suppressed emails from Klaviyo\n");
         
         $totalEmails = count($emailList);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalEmails} email addresses to unsubscribe\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Found {$totalEmails} email addresses to unsubscribe\n");
         error_log("nce_task_bulk_unsubscribe_emails: Found {$totalEmails} emails");
         
         if ($totalEmails === 0) {
@@ -121,10 +123,10 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         $validCount = count($validEmails);
         
         if ($invalidCount > 0) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Skipped {$invalidCount} invalid email addresses\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Skipped {$invalidCount} invalid email addresses\n");
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] {$validCount} valid emails to process\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] {$validCount} valid emails to process\n");
         
         if ($validCount === 0) {
             return [
@@ -140,17 +142,17 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         
         // --- DRY RUN MODE: Return email list without unsubscribing ---
         if ($dryRun) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] DRY RUN: Returning email list without API calls\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] DRY RUN: Returning email list without API calls\n");
             
             // Show first 20 emails as sample
             $sampleEmails = array_slice($validEmails, 0, 20);
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample emails (first 20):\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Sample emails (first 20):\n");
             foreach ($sampleEmails as $i => $email) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "]   " . ($i + 1) . ". {$email}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "]   " . ($i + 1) . ". {$email}\n");
             }
             
             if (count($validEmails) > 20) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "]   ... and " . (count($validEmails) - 20) . " more\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "]   ... and " . (count($validEmails) - 20) . " more\n");
             }
             
             $endTime = microtime(true);
@@ -180,13 +182,13 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         $failedBatches = 0;
         $errors = [];
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} emails each\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} emails each\n");
         
         foreach ($batches as $batchIndex => $batchEmails) {
             $batchNum = $batchIndex + 1;
             $batchCount = count($batchEmails);
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing batch {$batchNum}/{$totalBatches} ({$batchCount} emails)...\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Processing batch {$batchNum}/{$totalBatches} ({$batchCount} emails)...\n");
             error_log("nce_task_bulk_unsubscribe_emails: Processing batch {$batchNum}/{$totalBatches}");
             
             // Build profiles array for Klaviyo unsubscribe endpoint (per RAG Chunk D)
@@ -203,7 +205,7 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
             // Log sample from first batch
             if ($batchNum === 1 && !empty($profilesData)) {
                 $sampleEmails = array_slice($batchEmails, 0, 5);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample emails: " . implode(', ', $sampleEmails) . "\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Sample emails: " . implode(', ', $sampleEmails) . "\n");
             }
             
             // Build unsubscribe job payload (per RAG Chunk D)
@@ -225,17 +227,17 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
             if ($response['http'] >= 200 && $response['http'] < 300) {
                 $jobId = $response['body']['data']['id'] ?? 'unknown';
                 $unsubscribedCount += count($profilesData);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Batch {$batchNum} submitted successfully (Job ID: {$jobId})\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✓ Batch {$batchNum} submitted successfully (Job ID: {$jobId})\n");
                 error_log("nce_task_bulk_unsubscribe_emails: Batch {$batchNum} submitted (Job ID: {$jobId})");
             } else {
                 $failedBatches++;
                 $errorMsg = $response['error'] ?? 'Unknown error';
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n");
                 
                 if (!empty($response['body'])) {
                     $fullError = json_encode($response['body'], JSON_PRETTY_PRINT);
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n", FILE_APPEND);
+                    nce_write_log($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n");
                 }
                 
                 $errorDetail = [
@@ -267,7 +269,7 @@ if (!function_exists('nce_task_bulk_unsubscribe_emails')) {
         $completionMsg .= "[" . date('H:i:s') . "] Failed batches: {$failedBatches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Duration: {$duration}s\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        nce_write_log($temp_log, $completionMsg);
         error_log("nce_task_bulk_unsubscribe_emails: Complete - Unsubscribed: {$unsubscribedCount}, Failed: {$failedBatches}");
         
         $result = [
@@ -312,7 +314,7 @@ if (!function_exists('nce_fetch_klaviyo_suppressed_profiles')) {
         // Check if suppression timestamp exists (profile has been suppressed)
         $filter = 'greater-than(subscriptions.email.marketing.suppression.timestamp,1970-01-01T00:00:00Z)';
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching suppressed profiles from Klaviyo...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching suppressed profiles from Klaviyo...\n");
         
         while ($pageUrl && $pageCount < $maxPages) {
             $pageCount++;
@@ -329,7 +331,7 @@ if (!function_exists('nce_fetch_klaviyo_suppressed_profiles')) {
                 $fullUrl = $pageUrl;
             }
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching page {$pageCount}...\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching page {$pageCount}...\n");
             
             $args = [
                 'method'  => 'GET',
@@ -354,7 +356,7 @@ if (!function_exists('nce_fetch_klaviyo_suppressed_profiles')) {
                     $errorMsg .= ': ' . ($body['errors'][0]['detail'] ?? 'Unknown error');
                 }
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n");
                 return ['error' => $errorMsg];
             }
             
@@ -368,14 +370,14 @@ if (!function_exists('nce_fetch_klaviyo_suppressed_profiles')) {
                 }
                 
                 $profilesOnPage = count($body['data']);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Page {$pageCount}: {$profilesOnPage} profiles\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Page {$pageCount}: {$profilesOnPage} profiles\n");
             }
             
             // Check for next page
             $pageUrl = $body['links']['next'] ?? null;
             
             if (!$pageUrl) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] No more pages, fetch complete\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] No more pages, fetch complete\n");
                 break;
             }
             
@@ -384,14 +386,14 @@ if (!function_exists('nce_fetch_klaviyo_suppressed_profiles')) {
         }
         
         if ($pageCount >= $maxPages) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: Reached max page limit ({$maxPages}), there may be more profiles\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] WARNING: Reached max page limit ({$maxPages}), there may be more profiles\n");
         }
         
         // Remove duplicates
         $allEmails = array_unique($allEmails);
         $totalCount = count($allEmails);
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Total suppressed profiles fetched: {$totalCount}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Total suppressed profiles fetched: {$totalCount}\n");
         
         return [
             'emails' => array_values($allEmails),

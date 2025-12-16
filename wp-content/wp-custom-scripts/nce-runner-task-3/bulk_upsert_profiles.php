@@ -1,4 +1,4 @@
-<?php // v1.7.0 - 2025-12-14
+<?php // v1.7.1 - 2025-12-15
 declare(strict_types=1);
 
 /**
@@ -36,12 +36,13 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         
         error_log("nce_task_upsert_klaviyo_profiles: Starting sync (Job: {$jobName}, Lookback: " . ($noLookback ? 'disabled' : "{$lookbackHours}h") . ", OneAtATime: " . ($oneAtATime ? 'yes' : 'no') . ")");
         
-        // Initialize temp log file (only clear if not called from full sync)
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        if (!$skipLogClear) {
-            file_put_contents($temp_log, ""); // Clear the file
+        // Initialize log file with timestamp
+        $logs_dir = ABSPATH . 'wp-content/wp-custom-scripts/logs/';
+        if (!is_dir($logs_dir)) {
+            @mkdir($logs_dir, 0755, true);
         }
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UPSERT PROFILES - Job: {$jobName}\n", FILE_APPEND);
+        $temp_log = $logs_dir . 'task3_bulk_upsert_' . date('Y-m-d_H-i-s') . '.log';
+        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] BULK UPSERT PROFILES - Job: {$jobName}\n");
         
         global $wpdb;
         $startTime = microtime(true);
@@ -97,7 +98,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                     if ($value === null || $value === '') {
                         $hasNullPlaceholder = true;
                         $nullPlaceholderName = $placeholder;
-                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Placeholder {$placeholder} is null/empty - will run job\n", FILE_APPEND);
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Placeholder {$placeholder} is null/empty - will run job\n");
                         error_log("nce_task_upsert_klaviyo_profiles: Placeholder {$placeholder} is null/empty");
                         break;
                     }
@@ -110,7 +111,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
             
             // If any placeholder was null/empty, run the job (e.g., first run)
             if ($hasNullPlaceholder) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Running job (placeholder value missing - likely first run)\n", FILE_APPEND);
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Running job (placeholder value missing - likely first run)\n");
                 $onlyRunIfInfo = [
                     'executed' => false,
                     'reason' => "Placeholder {$nullPlaceholderName} is null/empty (first run)",
@@ -124,7 +125,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 $checkDuration = round((microtime(true) - $checkStartTime) * 1000, 2); // milliseconds
                 
                 if ($wpdb->last_error) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway ({$checkDuration}ms)\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: only_run_if query error: " . $wpdb->last_error . " - will run job anyway ({$checkDuration}ms)\n");
                     error_log("nce_task_upsert_klaviyo_profiles: only_run_if query error (running anyway): " . $wpdb->last_error);
                     $onlyRunIfInfo = [
                         'executed' => true,
@@ -135,7 +136,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                     ];
                     // Continue anyway if the check query fails (fail-safe)
                 } elseif (empty($checkResult)) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process ({$checkDuration}ms)\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  SKIPPED: only_run_if returned empty/null - no updates to process ({$checkDuration}ms)\n");
                     error_log("nce_task_upsert_klaviyo_profiles: Skipping - only_run_if returned empty");
                     return [
                         'success' => true,
@@ -150,7 +151,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                         ]
                     ];
                 } else {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult}, {$checkDuration}ms)\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ only_run_if check passed (result: {$checkResult}, {$checkDuration}ms)\n");
                     error_log("nce_task_upsert_klaviyo_profiles: only_run_if check passed");
                     $onlyRunIfInfo = [
                         'executed' => true,
@@ -161,19 +162,19 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 }
             }
         }
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n");
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback: " . ($noLookback ? 'disabled (sync ALL)' : "{$lookbackHours} hours") . "\n", FILE_APPEND);
         
         // --- 2. Apply lookback filter if enabled ---
         if (!$noLookback && $lookbackHours > 0) {
             $cutoffTime = date('Y-m-d H:i:s', strtotime("-{$lookbackHours} hours"));
             $queryString = nce_add_time_filter_to_query($queryString, $cutoffTime);
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Filtering: only profiles updated/created after {$cutoffTime}\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Filtering: only profiles updated/created after {$cutoffTime}\n");
         }
         
         // --- 3. Validate query with LIMIT 3 ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Validating query structure...\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Final query: " . substr($queryString, 0, 200) . "...\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Validating query structure...\n");
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Final query: " . substr($queryString, 0, 200) . "...\n");
         error_log("nce_task_upsert_klaviyo_profiles: Validating query with LIMIT 3");
         
         // Add LIMIT 3 to query for validation
@@ -183,7 +184,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         
         if ($wpdb->last_error) {
             $errorMsg = "Query validation failed: " . $wpdb->last_error;
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n");
             return [
                 'error' => $errorMsg,
                 'job_name' => $jobName,
@@ -192,7 +193,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         }
         
         if (empty($testRows)) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] No profiles to sync\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] No profiles to sync\n");
             return [
                 'success' => true,
                 'message' => 'No profiles found to sync',
@@ -227,7 +228,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         
         if (!$hasIdentifier) {
             $errorMsg = "Query must return at least one identifier column: " . implode(', ', $identifierColumns);
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n");
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Available columns: " . implode(', ', $availableColumns) . "\n", FILE_APPEND);
             return [
                 'error' => $errorMsg,
@@ -238,9 +239,9 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         }
         
         // Log column validation results
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Query validation passed\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Query validation passed\n");
         file_put_contents($temp_log, "[" . date('H:i:s') . "] Usable columns: " . implode(', ', $usableColumns) . "\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Note: Invalid emails/phones will be skipped automatically\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Note: Invalid emails/phones will be skipped automatically\n");
         
         if (!empty($ignoredColumns)) {
             file_put_contents($temp_log, "[" . date('H:i:s') . "] Ignored columns (not valid for Klaviyo): " . implode(', ', $ignoredColumns) . "\n", FILE_APPEND);
@@ -256,13 +257,13 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         error_log("nce_task_upsert_klaviyo_profiles: Validation passed, proceeding with full sync");
         
         // --- 4. Fetch all profiles ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching all profiles...\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching all profiles...\n");
         
         $allProfiles = $wpdb->get_results($queryString, ARRAY_A);
         
         if ($wpdb->last_error) {
             $errorMsg = "Failed to fetch profiles: " . $wpdb->last_error;
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n");
             return [
                 'error' => $errorMsg,
                 'job_name' => $jobName
@@ -270,8 +271,8 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         }
         
         $totalProfiles = count($allProfiles);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalProfiles} profiles to sync\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG: Query returned {$totalProfiles} rows for job '{$jobName}'\n", FILE_APPEND);
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalProfiles} profiles to sync\n");
+        file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG: Query returned {$totalProfiles} rows for job '{$jobName}'\n");
         error_log("nce_task_upsert_klaviyo_profiles: Found {$totalProfiles} profiles");
         
         if ($totalProfiles === 0) {
@@ -294,11 +295,11 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         $failedEmails = []; // Track which emails failed (for one_at_a_time mode)
         
         if ($oneAtATime) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] 🔍 ONE-AT-A-TIME MODE: Processing {$totalProfiles} profiles individually\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] 🔍 ONE-AT-A-TIME MODE: Processing {$totalProfiles} profiles individually\n");
         } else {
             $batches = array_chunk($allProfiles, $batchSize);
             $totalBatches = count($batches);
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} profiles each\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} profiles each\n");
         }
         
         $url = 'https://a.klaviyo.com/api/profile-bulk-import-jobs';
@@ -313,7 +314,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 if ($profileData === null) {
                     $skippedProfiles++;
                     $email = $profile['email'] ?? 'unknown';
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  {$profileNum}/{$totalProfiles} Skipped: {$email} - {$debugReason}\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ⏭️  {$profileNum}/{$totalProfiles} Skipped: {$email} - {$debugReason}\n");
                     continue;
                 }
                 
@@ -331,10 +332,20 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                     ]
                 ];
                 
+                // Log payload for first 5 profiles
+                if ($profileNum <= 5) {
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] 📥 Profile API Payload: " . json_encode($payload) . "\n", FILE_APPEND);
+                }
+                
                 $response = nce_klaviyo_bulk_request('POST', $url, $apiKey, $apiVersion, $payload);
                 
                 if ($response['http'] >= 200 && $response['http'] < 300) {
                     $syncedProfiles++;
+                    
+                    // Log full profile API response for first 5 profiles
+                    if ($profileNum <= 5) {
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] 📤 Profile API Response (HTTP {$response['http']}): " . json_encode($response['body']) . "\n", FILE_APPEND);
+                    }
                     
                     // Check if this is a NEW profile (should subscribe to email)
                     // New = updated_at is null OR updated_at <= created_at
@@ -352,6 +363,8 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                         } else {
                             $subscribeStatus = ' (email subscribe failed: ' . ($subscribeResult['error'] ?? 'unknown') . ')';
                         }
+                        // Log full email consent API response
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] 📧 Email Consent API Response (HTTP {$subscribeResult['http']}): " . json_encode($subscribeResult['body'] ?? $subscribeResult['error']) . "\n", FILE_APPEND);
                         
                         // Also subscribe to SMS transactional (not marketing) if phone exists
                         $phone = $profile['phone_number'] ?? null;
@@ -363,26 +376,26 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                             } else {
                                 $subscribeStatus .= ' (sms failed: ' . ($smsResult['error'] ?? 'unknown') . ')';
                             }
+                            // Log full SMS consent API response
+                            file_put_contents($temp_log, "[" . date('H:i:s') . "] 📱 SMS Consent API Response (HTTP {$smsResult['http']}): " . json_encode($smsResult['body'] ?? $smsResult['error']) . "\n", FILE_APPEND);
                         }
                     }
                     
                     // Log every 50th success or first 10
                     if ($profileNum <= 10 || $profileNum % 50 === 0) {
                         $newTag = $isNewProfile ? ' [NEW]' : '';
-                        file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ {$profileNum}/{$totalProfiles} {$email}{$newTag}{$subscribeStatus}\n", FILE_APPEND);
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ {$profileNum}/{$totalProfiles} {$email}{$newTag}{$subscribeStatus}\n");
                     }
                 } else {
                     $failedProfiles++;
                     $errorMsg = $response['error'] ?? 'Unknown error';
                     $failedEmails[] = $email;
                     
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ {$profileNum}/{$totalProfiles} FAILED: {$email} - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ {$profileNum}/{$totalProfiles} FAILED: {$email} - HTTP {$response['http']}: {$errorMsg}\n");
                     
-                    // Log full error for failed profiles
-                    if (!empty($response['body']['errors'])) {
-                        $errDetail = $response['body']['errors'][0]['detail'] ?? '';
-                        file_put_contents($temp_log, "[" . date('H:i:s') . "]   Detail: {$errDetail}\n", FILE_APPEND);
-                    }
+                    // Log full payload and response for failed profiles
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] 📥 FAILED Payload: " . json_encode($payload) . "\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] 📤 FAILED Response: " . json_encode($response['body']) . "\n", FILE_APPEND);
                     
                     $errors[] = [
                         'profile_num' => $profileNum,
@@ -397,7 +410,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 
                 // Progress log every 100 profiles
                 if ($profileNum % 100 === 0) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Progress: {$profileNum}/{$totalProfiles} - OK: {$syncedProfiles}, Failed: {$failedProfiles}, Skipped: {$skippedProfiles}\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Progress: {$profileNum}/{$totalProfiles} - OK: {$syncedProfiles}, Failed: {$failedProfiles}, Skipped: {$skippedProfiles}\n");
                 }
             }
             $totalBatches = $totalProfiles; // For reporting
@@ -413,7 +426,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 $batchNum = $batchIndex + 1;
                 $batchCount = count($batchProfiles);
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing batch {$batchNum}/{$totalBatches} ({$batchCount} profiles)...\n", FILE_APPEND);
+                file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing batch {$batchNum}/{$totalBatches} ({$batchCount} profiles)...\n");
                 error_log("nce_task_upsert_klaviyo_profiles: Processing batch {$batchNum}/{$totalBatches}");
                 
                 // Build profiles array for Klaviyo
@@ -432,11 +445,11 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 $skippedProfiles += $batchSkipped;
                 
                 if ($batchSkipped > 0) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}: Skipped {$batchSkipped} invalid profiles\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}: Skipped {$batchSkipped} invalid profiles\n");
                 }
                 
                 if (empty($profilesData)) {
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}: No valid profiles to sync\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Batch {$batchNum}: No valid profiles to sync\n");
                     continue;
                 }
                 
@@ -454,7 +467,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                     // Log first 2 complete profiles for structure inspection
                     $sampleProfiles = array_slice($profilesData, 0, 2);
                     $sampleJson = json_encode($sampleProfiles, JSON_PRETTY_PRINT);
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample profile structures:\n{$sampleJson}\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample profile structures:\n{$sampleJson}\n");
                 }
                 
                 // Build bulk import job payload
@@ -475,24 +488,24 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 if ($response['http'] >= 200 && $response['http'] < 300) {
                     $jobId = $response['body']['data']['id'] ?? 'unknown';
                     $syncedProfiles += count($profilesData);
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Batch {$batchNum} submitted successfully (Job ID: {$jobId})\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Batch {$batchNum} submitted successfully (Job ID: {$jobId})\n");
                     error_log("nce_task_upsert_klaviyo_profiles: Batch {$batchNum} submitted (Job ID: {$jobId})");
                 } else {
                     $failedBatches++;
                     $errorMsg = $response['error'] ?? 'Unknown error';
                     
                     // Log detailed error info with raw response
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
+                    file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n");
                     
                     // Log formatted error body
                     if (!empty($response['body'])) {
                         $fullError = json_encode($response['body'], JSON_PRETTY_PRINT);
-                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n", FILE_APPEND);
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n");
                     }
                     
                     // Log raw response for complete debugging
                     if (!empty($response['raw_body'])) {
-                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Raw response body:\n{$response['raw_body']}\n", FILE_APPEND);
+                        file_put_contents($temp_log, "[" . date('H:i:s') . "] Raw response body:\n{$response['raw_body']}\n");
                     }
                     
                     // Extract all error details from Klaviyo's errors array
@@ -539,7 +552,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
                 ['%s'],
                 ['%d']
             );
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Updated last_run_datetime to {$now}\n", FILE_APPEND);
+            file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Updated last_run_datetime to {$now}\n");
             error_log("nce_task_upsert_klaviyo_profiles: Updated last_run_datetime");
         }
         
@@ -562,7 +575,7 @@ if (!function_exists('nce_task_upsert_klaviyo_profiles')) {
         }
         $completionMsg .= "[" . date('H:i:s') . "] Duration: {$duration}s\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        file_put_contents($temp_log, $completionMsg);
         error_log("nce_task_upsert_klaviyo_profiles: Complete - Synced: {$syncedProfiles}, Failed: {$failedBatches}");
         
         $result = [
@@ -697,7 +710,7 @@ if (!function_exists('nce_build_klaviyo_profile')) {
         // Add identifiers
         if ($email) $attributes['email'] = $email;
         if ($phone) $attributes['phone_number'] = $phone;
-        if ($externalId) $attributes['external_id'] = $externalId;
+        // if ($externalId) $attributes['external_id'] = $externalId; // DISABLED: Only use email to match profiles
         
         // Add basic fields
         if (in_array('first_name', $usableColumns) && !empty($profile['first_name'])) {
@@ -724,6 +737,27 @@ if (!function_exists('nce_build_klaviyo_profile')) {
         if (!empty($location)) {
             $attributes['location'] = $location;
         }
+        
+        // Determine if this is a new profile or update
+        // New = updated_at is null OR updated_at <= created_at
+        $createdAt = $profile['created_at'] ?? null;
+        $updatedAt = $profile['updated_at'] ?? null;
+        $isNewProfile = empty($updatedAt) || (strtotime($updatedAt) <= strtotime($createdAt));
+        
+        // Add custom properties based on new vs update
+        $customProps = [];
+        if ($isNewProfile) {
+            $customProps['create_method'] = 'Scheduled Update';
+        } else {
+            $customProps['update_method'] = 'Scheduled Update';
+        }
+        
+        // Add wp_user_id as custom property (not as identifier)
+        if ($externalId) {
+            $customProps['wp_user_id'] = $externalId;
+        }
+        
+        $attributes['properties'] = $customProps;
         
         // Note: subscriptions/consent cannot be set via bulk import API
         // Marketing consent must be managed separately via subscription endpoints
@@ -858,7 +892,7 @@ if (!function_exists('nce_add_time_filter_to_query')) {
  * @param string $email Email address
  * @param string $apiKey Klaviyo API key
  * @param string $apiVersion API revision
- * @return array ['success' => bool, 'error' => string|null]
+ * @return array ['success' => bool, 'error' => string|null, 'http' => int, 'body' => array|null]
  */
 if (!function_exists('nce_subscribe_profile_to_email')) {
     function nce_subscribe_profile_to_email(string $email, string $apiKey, string $apiVersion): array {
@@ -903,19 +937,19 @@ if (!function_exists('nce_subscribe_profile_to_email')) {
         
         $res = wp_remote_request($url, $args);
         $http = is_wp_error($res) ? 0 : (int) wp_remote_retrieve_response_code($res);
+        $body = is_wp_error($res) ? null : json_decode(wp_remote_retrieve_body($res), true);
         
         if (is_wp_error($res)) {
-            return ['success' => false, 'error' => $res->get_error_message()];
+            return ['success' => false, 'error' => $res->get_error_message(), 'http' => 0, 'body' => null];
         }
         
         if ($http >= 200 && $http < 300) {
-            return ['success' => true, 'error' => null];
+            return ['success' => true, 'error' => null, 'http' => $http, 'body' => $body];
         }
         
-        $body = json_decode(wp_remote_retrieve_body($res), true);
         $errorMsg = !empty($body['errors'][0]['detail']) ? $body['errors'][0]['detail'] : "HTTP {$http}";
         
-        return ['success' => false, 'error' => $errorMsg];
+        return ['success' => false, 'error' => $errorMsg, 'http' => $http, 'body' => $body];
     }
 }
 
@@ -925,7 +959,7 @@ if (!function_exists('nce_subscribe_profile_to_email')) {
  * @param string $phone Phone number (E.164 format preferred)
  * @param string $apiKey Klaviyo API key
  * @param string $apiVersion API revision
- * @return array ['success' => bool, 'error' => string|null]
+ * @return array ['success' => bool, 'error' => string|null, 'http' => int, 'body' => array|null]
  */
 if (!function_exists('nce_subscribe_profile_to_sms_transactional')) {
     function nce_subscribe_profile_to_sms_transactional(string $phone, string $apiKey, string $apiVersion): array {
@@ -938,7 +972,7 @@ if (!function_exists('nce_subscribe_profile_to_sms_transactional')) {
         
         // Validate phone format
         if (!preg_match('/^\+\d{10,15}$/', $phone)) {
-            return ['success' => false, 'error' => 'Invalid phone format'];
+            return ['success' => false, 'error' => 'Invalid phone format', 'http' => 0, 'body' => null];
         }
         
         $url = 'https://a.klaviyo.com/api/profile-subscription-bulk-create-jobs';
@@ -982,19 +1016,19 @@ if (!function_exists('nce_subscribe_profile_to_sms_transactional')) {
         
         $res = wp_remote_request($url, $args);
         $http = is_wp_error($res) ? 0 : (int) wp_remote_retrieve_response_code($res);
+        $body = is_wp_error($res) ? null : json_decode(wp_remote_retrieve_body($res), true);
         
         if (is_wp_error($res)) {
-            return ['success' => false, 'error' => $res->get_error_message()];
+            return ['success' => false, 'error' => $res->get_error_message(), 'http' => 0, 'body' => null];
         }
         
         if ($http >= 200 && $http < 300) {
-            return ['success' => true, 'error' => null];
+            return ['success' => true, 'error' => null, 'http' => $http, 'body' => $body];
         }
         
-        $body = json_decode(wp_remote_retrieve_body($res), true);
         $errorMsg = !empty($body['errors'][0]['detail']) ? $body['errors'][0]['detail'] : "HTTP {$http}";
         
-        return ['success' => false, 'error' => $errorMsg];
+        return ['success' => false, 'error' => $errorMsg, 'http' => $http, 'body' => $body];
     }
 }
 

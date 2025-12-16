@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// Load logging helper
+require_once __DIR__ . '/../includes/nce_logging_helper.php';
+
 /**
  * Delete All Klaviyo Data Sources - Task 2
  * 
@@ -25,10 +28,9 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
         
         error_log("nce_task_delete_all_data_sources: Starting deletion task (Job: {$jobName})");
         
-        // Initialize temp log file
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        file_put_contents($temp_log, ""); // Clear the file
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] DELETE ALL DATA SOURCES - Job: {$jobName}\n", FILE_APPEND);
+        // Initialize log file with timestamp using helper function
+        $temp_log = nce_init_log_file('task2_delete_all_data_sources');
+        nce_write_log($temp_log, "[" . date('Y-m-d H:i:s') . "] DELETE ALL DATA SOURCES - Job: {$jobName}\n");
         
         global $wpdb;
         
@@ -36,7 +38,7 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
         if ($confirm !== 'yes') {
             $message = "Safety check failed: Must pass confirm=yes to delete all data sources";
             error_log("nce_task_delete_all_data_sources: {$message}");
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$message}\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR: {$message}\n");
             return [
                 'error' => $message,
                 'usage' => 'Add confirm=yes to the request to proceed with deletion',
@@ -75,15 +77,15 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
             ];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API credentials loaded\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Confirm=yes received - proceeding with deletion\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] API credentials loaded\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Confirm=yes received - proceeding with deletion\n");
         
         // --- 3. Get all data sources ---
         $listUrl = 'https://a.klaviyo.com/api/data-sources';
         $allDataSources = [];
         $pageUrl = $listUrl;
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching all data sources...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching all data sources...\n");
         error_log("nce_task_delete_all_data_sources: Fetching data sources from Klaviyo");
         
         // Paginate through all data sources
@@ -93,7 +95,7 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
             if ($response['http'] < 200 || $response['http'] >= 300) {
                 $errorMsg = $response['error'] ?? 'Failed to fetch data sources';
                 error_log("nce_task_delete_all_data_sources: API error - " . $errorMsg);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: Failed to fetch data sources - HTTP {$response['http']}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR: Failed to fetch data sources - HTTP {$response['http']}\n");
                 
                 return [
                     'error' => 'Failed to fetch data sources from Klaviyo',
@@ -120,11 +122,11 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
         }
         
         $totalCount = count($allDataSources);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalCount} data sources\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Found {$totalCount} data sources\n");
         error_log("nce_task_delete_all_data_sources: Found {$totalCount} data sources to delete");
         
         if ($totalCount === 0) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] No data sources to delete\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] No data sources to delete\n");
             return [
                 'success' => true,
                 'message' => 'No data sources found to delete',
@@ -138,28 +140,28 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
         $failed = 0;
         $errors = [];
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Starting deletion of {$totalCount} data sources...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Starting deletion of {$totalCount} data sources...\n");
         
         foreach ($allDataSources as $index => $dataSource) {
             $dsId = $dataSource['id'] ?? null;
             $dsTitle = $dataSource['attributes']['title'] ?? 'Unknown';
             
             if (!$dsId) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Skipping data source with no ID\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Skipping data source with no ID\n");
                 continue;
             }
             
             $deleteUrl = "https://a.klaviyo.com/api/data-sources/{$dsId}";
             $currentNum = $index + 1;
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Deleting [{$currentNum}/{$totalCount}]: {$dsTitle} (ID: {$dsId})\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Deleting [{$currentNum}/{$totalCount}]: {$dsTitle} (ID: {$dsId})\n");
             error_log("nce_task_delete_all_data_sources: Deleting data source [{$currentNum}/{$totalCount}]: {$dsTitle}");
             
             $response = nce_klaviyo_api_request('DELETE', $deleteUrl, $apiKey, $apiVersion);
             
             if ($response['http'] >= 200 && $response['http'] < 300) {
                 $deleted++;
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Deleted successfully\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✓ Deleted successfully\n");
             } else {
                 $failed++;
                 $errorMsg = $response['error'] ?? 'Unknown error';
@@ -169,7 +171,7 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
                     'http_status' => $response['http'],
                     'error' => $errorMsg
                 ];
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Failed to delete - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✗ Failed to delete - HTTP {$response['http']}: {$errorMsg}\n");
                 error_log("nce_task_delete_all_data_sources: Failed to delete {$dsTitle} - HTTP {$response['http']}");
             }
             
@@ -185,7 +187,7 @@ if (!function_exists('nce_task_delete_all_data_sources')) {
         $completionMsg .= "[" . date('H:i:s') . "] Successfully deleted: {$deleted}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Failed: {$failed}\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        nce_write_log($temp_log, $completionMsg);
         error_log("nce_task_delete_all_data_sources: Complete - Deleted: {$deleted}, Failed: {$failed}");
         
         $result = [

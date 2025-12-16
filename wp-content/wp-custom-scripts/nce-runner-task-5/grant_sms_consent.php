@@ -1,7 +1,10 @@
 <?php
-// LAST UPDATED: 2025-12-11
-// v2.1.0 - Skip profiles already subscribed to SMS, add skip_log_clear param
+// LAST UPDATED: 2025-12-15
+// v2.2.0 - Skip profiles already subscribed to SMS, add skip_log_clear param, timestamped logs
 declare(strict_types=1);
+
+// Load logging helper
+require_once __DIR__ . '/../includes/nce_logging_helper.php';
 
 /**
  * Grant SMS Marketing Consent for NEW Profiles - Task 5
@@ -51,21 +54,18 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         
         error_log("nce_task_grant_sms_consent: Starting (Job: {$jobName}, Lookback: {$lookbackHours}h)");
         
-        // Initialize temp log file (only clear if not called from full sync)
-        $temp_log = ABSPATH . 'wp-content/wp-custom-scripts/temp_log.log';
-        if (!$skipLogClear) {
-            file_put_contents($temp_log, ""); // Clear the file
-        }
-        file_put_contents($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT SMS CONSENT (NEW PROFILES) - Job: {$jobName}\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] ⚠️  SMS CONSENT: Only run for profiles with explicit SMS opt-in\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Lookback window: {$lookbackHours} hours\n", FILE_APPEND);
+        // Initialize log file with timestamp using helper function
+        $temp_log = nce_init_log_file('task5_grant_sms_consent');
+        nce_write_log($temp_log, "[" . date('Y-m-d H:i:s') . "] GRANT SMS CONSENT (NEW PROFILES) - Job: {$jobName}\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] ⚠️  SMS CONSENT: Only run for profiles with explicit SMS opt-in\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Lookback window: {$lookbackHours} hours\n");
         
         global $wpdb;
         $startTime = microtime(true);
         
         // Calculate cutoff datetime
         $cutoffDatetime = date('Y-m-d H:i:s', strtotime("-{$lookbackHours} hours"));
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Cutoff datetime: {$cutoffDatetime}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Cutoff datetime: {$cutoffDatetime}\n");
         
         // --- 1. Get configuration ---
         $table = $wpdb->prefix . 'klaviyo_globals';
@@ -88,11 +88,11 @@ if (!function_exists('nce_task_grant_sms_consent')) {
             return ['error' => 'Missing api_key in configuration', 'job_name' => $jobName];
         }
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n", FILE_APPEND);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Configuration loaded\n");
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] API Version: {$apiVersion}\n");
         
         // --- 2. Fetch NEW profiles from Klaviyo API (created within lookback window) ---
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching profiles created after {$cutoffDatetime} from Klaviyo API...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching profiles created after {$cutoffDatetime} from Klaviyo API...\n");
         
         $recentProfiles = nce_fetch_recent_profiles_for_sms($apiKey, $apiVersion, $cutoffDatetime, $temp_log);
         
@@ -106,7 +106,7 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         $newProfiles = $recentProfiles['profiles'];
         $totalNew = count($newProfiles);
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Found {$totalNew} NEW profiles within lookback window\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Found {$totalNew} NEW profiles within lookback window\n");
         error_log("nce_task_grant_sms_consent: Found {$totalNew} new profiles from Klaviyo");
         
         // Filter to only profiles with valid phone numbers AND not already SMS subscribed
@@ -131,9 +131,9 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         });
         
         $totalWithPhone = count($phoneProfiles);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] {$totalWithPhone} new profiles have valid phone numbers (need consent)\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] {$totalWithPhone} new profiles have valid phone numbers (need consent)\n");
         if ($alreadySubscribed > 0) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] {$alreadySubscribed} profiles already have SMS consent (skipped)\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] {$alreadySubscribed} profiles already have SMS consent (skipped)\n");
         }
         
         if ($totalWithPhone === 0) {
@@ -156,13 +156,13 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         $failedBatches = 0;
         $errors = [];
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} profiles each\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Processing {$totalBatches} batch(es) of up to {$batchSize} profiles each\n");
         
         foreach ($batches as $batchIndex => $batchProfiles) {
             $batchNum = $batchIndex + 1;
             $batchCount = count($batchProfiles);
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Processing batch {$batchNum}/{$totalBatches} ({$batchCount} profiles)...\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Processing batch {$batchNum}/{$totalBatches} ({$batchCount} profiles)...\n");
             error_log("nce_task_grant_sms_consent: Processing batch {$batchNum}/{$totalBatches}");
             
             // Build profiles array for Klaviyo subscription endpoint
@@ -199,7 +199,7 @@ if (!function_exists('nce_task_grant_sms_consent')) {
             // Log sample from first batch
             if ($batchNum === 1 && !empty($profilesData)) {
                 $samplePhones = array_slice(array_column(array_column($profilesData, 'attributes'), 'phone_number'), 0, 5);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Sample phones: " . implode(', ', $samplePhones) . "\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Sample phones: " . implode(', ', $samplePhones) . "\n");
             }
             
             // Build subscription job payload (SMS channel)
@@ -222,17 +222,17 @@ if (!function_exists('nce_task_grant_sms_consent')) {
             if ($response['http'] >= 200 && $response['http'] < 300) {
                 $jobId = $response['body']['data']['id'] ?? 'unknown';
                 $grantedCount += count($profilesData);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✓ Batch {$batchNum} submitted successfully (Job ID: {$jobId})\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✓ Batch {$batchNum} submitted successfully (Job ID: {$jobId})\n");
                 error_log("nce_task_grant_sms_consent: Batch {$batchNum} submitted (Job ID: {$jobId})");
             } else {
                 $failedBatches++;
                 $errorMsg = $response['error'] ?? 'Unknown error';
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ✗ Batch {$batchNum} failed - HTTP {$response['http']}: {$errorMsg}\n");
                 
                 if (!empty($response['body'])) {
                     $fullError = json_encode($response['body'], JSON_PRETTY_PRINT);
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n", FILE_APPEND);
+                    nce_write_log($temp_log, "[" . date('H:i:s') . "] Klaviyo error body:\n{$fullError}\n");
                 }
                 
                 $errorDetail = [
@@ -266,7 +266,7 @@ if (!function_exists('nce_task_grant_sms_consent')) {
         $completionMsg .= "[" . date('H:i:s') . "] Failed batches: {$failedBatches}\n";
         $completionMsg .= "[" . date('H:i:s') . "] Duration: {$duration}s\n";
         
-        file_put_contents($temp_log, $completionMsg, FILE_APPEND);
+        nce_write_log($temp_log, $completionMsg);
         error_log("nce_task_grant_sms_consent: Complete - Granted: {$grantedCount}, Already subscribed: {$alreadySubscribed}, Failed: {$failedBatches}");
         
         $result = [
@@ -315,7 +315,7 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
         // Filter for profiles created after cutoff
         $filter = "greater-than(created,{$cutoffISO})";
         
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching profiles created after {$cutoffDatetime}...\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching profiles created after {$cutoffDatetime}...\n");
         
         while ($pageUrl && $pageCount < $maxPages) {
             $pageCount++;
@@ -331,13 +331,13 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
                 $fullUrl = $pageUrl . '?' . $queryParams;
                 
                 // DEBUG: Log the filter and full URL
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Filter: {$filter}\n", FILE_APPEND);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Full URL: {$fullUrl}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] DEBUG Filter: {$filter}\n");
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] DEBUG Full URL: {$fullUrl}\n");
             } else {
                 $fullUrl = $pageUrl;
             }
             
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] Fetching page {$pageCount}...\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] Fetching page {$pageCount}...\n");
             
             $args = [
                 'method'  => 'GET',
@@ -362,7 +362,7 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
                     $errorMsg .= ': ' . ($body['errors'][0]['detail'] ?? 'Unknown error');
                 }
                 
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] ERROR: {$errorMsg}\n");
                 return ['error' => $errorMsg];
             }
             
@@ -376,8 +376,8 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
                         $samplePhones[] = $p['attributes']['phone_number'] ?? '(null)';
                         $sampleCreated[] = $p['attributes']['created'] ?? '(null)';
                     }
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Sample phones: " . implode(', ', $samplePhones) . "\n", FILE_APPEND);
-                    file_put_contents($temp_log, "[" . date('H:i:s') . "] DEBUG Sample created dates: " . implode(', ', $sampleCreated) . "\n", FILE_APPEND);
+                    nce_write_log($temp_log, "[" . date('H:i:s') . "] DEBUG Sample phones: " . implode(', ', $samplePhones) . "\n");
+                    nce_write_log($temp_log, "[" . date('H:i:s') . "] DEBUG Sample created dates: " . implode(', ', $sampleCreated) . "\n");
                 }
                 
                 foreach ($body['data'] as $profile) {
@@ -390,14 +390,14 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
                 }
                 
                 $profilesOnPage = count($body['data']);
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] Page {$pageCount}: {$profilesOnPage} profiles\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] Page {$pageCount}: {$profilesOnPage} profiles\n");
             }
             
             // Check for next page
             $pageUrl = $body['links']['next'] ?? null;
             
             if (!$pageUrl) {
-                file_put_contents($temp_log, "[" . date('H:i:s') . "] No more pages, fetch complete\n", FILE_APPEND);
+                nce_write_log($temp_log, "[" . date('H:i:s') . "] No more pages, fetch complete\n");
                 break;
             }
             
@@ -406,11 +406,11 @@ if (!function_exists('nce_fetch_recent_profiles_for_sms')) {
         }
         
         if ($pageCount >= $maxPages) {
-            file_put_contents($temp_log, "[" . date('H:i:s') . "] WARNING: Reached max page limit ({$maxPages}), there may be more profiles\n", FILE_APPEND);
+            nce_write_log($temp_log, "[" . date('H:i:s') . "] WARNING: Reached max page limit ({$maxPages}), there may be more profiles\n");
         }
         
         $totalCount = count($allProfiles);
-        file_put_contents($temp_log, "[" . date('H:i:s') . "] Total recent profiles fetched: {$totalCount}\n", FILE_APPEND);
+        nce_write_log($temp_log, "[" . date('H:i:s') . "] Total recent profiles fetched: {$totalCount}\n");
         
         return [
             'profiles' => $allProfiles,
