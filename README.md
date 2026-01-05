@@ -1,119 +1,189 @@
 # NCE Klaviyo Integration
 
-WordPress plugin that syncs customer data to Klaviyo including profiles, family members, enrollments, and consent management.
+WordPress integration that syncs customer data to Klaviyo including profiles, family members, enrollments, and consent management.
 
 ## Features
-- **Full Sync orchestration** - Task 9 runs all sync operations in sequence
-- **Batch processing** - 450 records per batch (configurable)
-- **Automatic rate limiting** - Handles HTTP 429 with exponential backoff
-- **Real-time logging** - Progress tracking in database and log files
-- **Admin Widget** - One-click sync from WordPress admin
 
-## Available Tasks
-
-| Task | Purpose | Documentation |
-|------|---------|---------------|
-| **1** | Upload family members to Klaviyo data source | [Task 1](wp-content/wp-custom-scripts/nce-runner-task-1/) |
-| **3** | Bulk upsert profiles (attributes only) | [Task 3](wp-content/wp-custom-scripts/nce-runner-task-3/) |
-| **4** | Grant email consent (NEW profiles) | [Task 4](wp-content/wp-custom-scripts/nce-runner-task-4/) |
-| **5** | Grant SMS consent (NEW profiles) | [Task 5](wp-content/wp-custom-scripts/nce-runner-task-5/) |
-| **6** | Bulk unsubscribe (suppression fix) | [Task 6](wp-content/wp-custom-scripts/nce-runner-task-6/) |
-| **7** | Fetch & cache profiles with phone numbers | [Task 7](wp-content/wp-custom-scripts/nce-runner-task-7/) |
-| **8** | Process cached profiles for SMS consent | [Task 8](wp-content/wp-custom-scripts/nce-runner-task-8/) |
-| **9** | **Full Sync** - Runs Tasks 3 → 1 → 4 → 5 → 1b | [Task 9](wp-content/wp-custom-scripts/nce-runner-task-9/) |
-
-See `TASK_SUMMARY.md` for complete usage guide.
+- **Chained Cron Execution** - Each task runs in its own PHP process with independent timeouts
+- **JSON-Based Configuration** - Edit task order, enable/disable, and pauses via `tasks-config.json`
+- **Interactive Dashboard** - Embedded in WordPress via shortcode `[nce_job_runner]`
+- **Payment Plans Viewer** - View payment plan status via shortcode `[nce_payment_plans]`
+- **Global Lock Mechanism** - Prevents overlapping cron runs
+- **Batch Processing** - 450 records per batch with automatic rate limiting
+- **Comprehensive Logging** - Per-run log files with task timing
 
 ## Quick Start
 
-### Full Sync (Recommended)
-```bash
-# Run complete sync (profiles + family members + consent + enrollments)
-curl "https://your-site.com/wp-json/nce/v1/run?task=9"
+### Dashboard Access
+Add shortcode to any WordPress page:
+```
+[nce_job_runner]
+```
+- View and edit task configuration
+- Run individual tasks or full sync
+- View Klaviyo globals table
 
-# With custom lookback (default: 14 hours)
-curl "https://your-site.com/wp-json/nce/v1/run?task=9&lookback_hours=24"
+### Payment Plans Viewer
+Add shortcode to any WordPress page:
+```
+[nce_payment_plans]
+```
+- View all payment plans grouped by plan ID
+- Filter by customer name/email
+- See paid vs outstanding amounts
 
-# Skip specific tasks
-curl "https://your-site.com/wp-json/nce/v1/run?task=9&skip_tasks=1,5"
+### Run Full Sync via Cron
+The chained cron executes tasks in sequence:
+1. **Zoho Update** - SQL procedure `update_for_zoho_all`
+2. **Profile Upsert** - Two-step email match + consent
+3. **Family Members** - Custom object upload
+4. **Email Consent** - Grant marketing consent
+5. **SMS Consent** - Grant SMS consent
+6. **Enrollment** - Custom object upload
+7. **Enrollment Events** - Event tracking
+
+## Task Configuration
+
+Edit `wp-content/wp-custom-scripts/tasks-config.json`:
+
+```json
+{
+  "api_key": "pk_xxx",
+  "api_version": "2025-10-15",
+  "tasks": [
+    {
+      "id": "zoho",
+      "order": 1,
+      "name": "Zoho Update",
+      "enabled": true,
+      "pause": 5,
+      "stop_on_fail": true,
+      "type": "sql",
+      "procedure": "update_for_zoho_all"
+    },
+    {
+      "id": 3,
+      "order": 2,
+      "name": "Profile Upsert",
+      "enabled": true,
+      "pause": 30,
+      "stop_on_fail": true,
+      "type": "task",
+      "file": "nce-runner-task-3/upsert_profiles_two_step.php",
+      "function": "nce_task_upsert_klaviyo_profiles_two_step",
+      "params": { "job_name": "profiles" }
+    }
+  ]
+}
 ```
 
-### Individual Tasks
-```bash
-# Sync profiles only
-curl "https://your-site.com/wp-json/nce/v1/run?task=3"
+**Task Properties:**
+| Property | Description |
+|----------|-------------|
+| `order` | Execution order (editable in dashboard) |
+| `enabled` | Whether task runs in cron chain |
+| `pause` | Seconds to wait after task completes |
+| `stop_on_fail` | Cancel remaining chain if task fails |
+| `type` | `sql` (stored procedure) or `task` (PHP function) |
 
-# Grant email consent (last 14 hours)
-curl "https://your-site.com/wp-json/nce/v1/run?task=4"
+## Available Tasks
 
-# Grant SMS consent (last 14 hours)
-curl "https://your-site.com/wp-json/nce/v1/run?task=5"
+| ID | Name | Purpose |
+|----|------|---------|
+| zoho | Zoho Update | Run SQL procedure for Zoho sync |
+| 3 | Profile Upsert | Two-step upsert (email match + phone patch + consent) |
+| 1 | Family Members | Upload family member data to Klaviyo |
+| 4 | Email Consent | Grant email marketing consent |
+| 5 | SMS Consent | Grant SMS marketing consent |
+| 1b | Enrollment | Upload enrollment data to Klaviyo |
+| 10 | Enrollment Events | Send enrollment events to Klaviyo |
+
+## REST API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/wp-json/nce/v1/run?task=X&job_name=Y` | GET | Run individual task |
+| `/wp-json/nce/v1/tasks-config` | GET | Read task configuration |
+| `/wp-json/nce/v1/tasks-config` | POST | Save task configuration |
+| `/wp-json/nce/v1/dashboard` | GET | Get dashboard HTML (iframe) |
+
+## File Structure
+
+```
+wp-content/
+├── plugins/nce-runner/
+│   └── nce-runner.php              # REST API + shortcodes
+│
+├── mu-plugins/
+│   ├── klaviyo-cron-loader.php     # Loads cron-handler on every request
+│   └── nce-payment-plans-viewer.php # Payment plans shortcode
+│
+└── wp-custom-scripts/
+    ├── tasks-config.json           # Task configuration (editable)
+    ├── cron-handler.php            # Chained cron execution
+    ├── nce-runner_task_manager.php # Task router
+    │
+    ├── Job Runner/
+    │   └── dashboard.php           # Dashboard UI
+    │
+    ├── nce-runner-task-1/          # Data object uploads
+    ├── nce-runner-task-3/          # Profile sync (two-step)
+    ├── nce-runner-task-4/          # Email consent
+    ├── nce-runner-task-5/          # SMS consent
+    ├── nce-runner-task-9/          # Full sync (legacy)
+    ├── nce-runner-task-10/         # Event tracking
+    │
+    ├── includes/                   # Shared utilities
+    └── logs/                       # Execution logs
 ```
 
-### Admin Widget
+## Cron Setup
 
-Embed the widget in WordPress admin:
-1. Add Custom HTML block to any admin page
-2. Paste contents of `wp-content/wp-custom-scripts/nce-runner-task-9/widget.html`
-3. Click the button to run full sync
+### WP Crontrol Plugin
+1. Install and activate WP Crontrol
+2. Add PHP Cron Event: `klaviyo_chained_sync_cron()`
+3. Set schedule (e.g., every 6 hours)
 
-## Task 9: Full Sync Details
-
-Task 9 orchestrates the following sequence:
-
-| Step | Task | Description |
-|------|------|-------------|
-| 1 | Task 3 | Bulk upsert profiles from database |
-| 2 | Task 1 | Upload family member data |
-| 3 | Task 4 | Grant email consent for new profiles |
-| 4 | Task 5 | Grant SMS consent for new profiles |
-| 5 | Task 1b | Upload enrollment data |
-
-**Parameters:**
-- `lookback_hours` (default: 14) - How far back to look for new profiles
-- `skip_tasks` - Comma-separated task numbers to skip (e.g., "1,5")
-- `job_name` - Job identifier for logging
-
-## Tools
-- PHPCS + WPCS
-- PHPStan
-- PHPUnit
-
-## Development
+### Manual cPanel Cron
 ```bash
-composer install
-composer run lint | fix | stan | test
+/usr/local/bin/php /path/to/wp-content/wp-custom-scripts/cron-handler.php
 ```
+
+## Key Concepts
+
+### Two-Step Profile Upsert
+Avoids phone number matching issues:
+1. `POST /api/profile-import` - Upsert by email only
+2. `PATCH /api/profiles/{id}` - Update phone by profile ID
+3. `POST /api/profile-subscription-bulk-create-jobs` - Email consent by ID
+4. `POST /api/profile-subscription-bulk-create-jobs` - SMS consent by ID
+
+### Global API Key
+API key is stored in `tasks-config.json` and loaded into global variables:
+- `$NCE_KLAVIYO_API_KEY`
+- `$NCE_KLAVIYO_API_VERSION`
+
+All tasks use these globals instead of per-job lookups.
+
+### Cron Lock Mechanism
+Uses WordPress transients to prevent overlapping runs:
+- Lock acquired at start of chain
+- Released on completion or failure
+- 30-minute auto-expiry as safety net
+
+## Logs
+
+Log files are written to `wp-content/wp-custom-scripts/logs/`:
+- `cron_sync_YYYY-MM-DD_HH-MM-SS.log` - Cron chain execution
+- `task1_write_objects_*.log` - Data object uploads
+- `task3_profiles_*.log` - Profile sync
 
 ## Documentation
-- `TASK_SUMMARY.md` - Complete task reference and usage guide
-- `PROJECT_HANDOFF.md` - Detailed architecture and operations guide
-- `KLAVIYO_SUPPORT_MEMO.md` - Consent rules and decision logic
 
-## Version Control
+- `docs/AI-AGENT-ONBOARDING.md` - Developer onboarding guide
+- `docs/api-endpoints.md` - API reference
+- `docs/browser-quick-reference.md` - Quick testing guide
 
-All PHP scripts include a timestamp header on line 2:
-```php
-// LAST UPDATED: 2025-12-12
-```
+## Version
 
-**Before uploading to server:** Note the timestamp  
-**After uploading to server:** Verify line 2 matches your local file
-
-## File Locations
-
-```
-wp-content/wp-custom-scripts/
-├── nce-runner_task_manager.php     # Central dispatcher
-├── temp_log.log                    # Execution logs
-├── nce-runner-task-1/              # Family members + enrollment upload
-├── nce-runner-task-3/              # Bulk upsert profiles
-├── nce-runner-task-4/              # Email consent
-├── nce-runner-task-5/              # SMS consent
-├── nce-runner-task-6/              # Bulk unsubscribe
-├── nce-runner-task-7/              # Fetch & cache profiles
-├── nce-runner-task-8/              # Process cached profiles
-└── nce-runner-task-9/              # Full sync orchestrator
-    ├── run_full_sync.php
-    └── widget.html
-```
+Last updated: 2025-12-18
