@@ -27,6 +27,13 @@ export default defineConfig({
 		emptyOutDir: true,
 		target: "es2015",
 		sourcemap: true,
+		rollupOptions: {
+			output: {
+				entryFileNames: "assets/nce-builder.js",
+				chunkFileNames: "assets/nce-builder-[name].js",
+				assetFileNames: "assets/nce-builder.[ext]",
+			},
+		},
 	},
 	optimizeDeps: {
 		include: ["feather-icons", "showdown"],
