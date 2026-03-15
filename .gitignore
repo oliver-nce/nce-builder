@@ -32,5 +32,6 @@ __pycache__/
 var/
 *.log
 
-# Frappe
+# Frappe build output
 nce_builder/public/dist/
+nce_builder/public/frontend/
