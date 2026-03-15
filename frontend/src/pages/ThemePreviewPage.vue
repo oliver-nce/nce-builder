@@ -350,29 +350,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue"
+import { h, computed, onMounted, onUnmounted, type FunctionalComponent } from "vue"
 
-// ─── Inline sub-components ────────────────────────────────────────
+// ─── Inline sub-components (render functions, no template compiler needed) ──
 
-const SectionLabel = {
-	name: "SectionLabel",
-	template: `<h2 class="text-xs font-bold uppercase tracking-widest preview-muted mb-3"><slot/></h2>`,
+const SectionLabel: FunctionalComponent = (_props, { slots }) => {
+	return h("h2", { class: "text-xs font-bold uppercase tracking-widest preview-muted mb-3" }, slots.default?.())
 }
 
-const SwatchCard = {
-	name: "SwatchCard",
-	props: { label: String, cssVar: String },
-	template: `
-		<div class="text-center">
-			<div
-				class="h-14 rounded-lg mb-1.5"
-				:style="{ backgroundColor: 'var(' + cssVar + ', #ccc)' }"
-			/>
-			<div class="text-xs font-medium preview-text">{{ label }}</div>
-			<div class="text-[10px] preview-muted font-mono">{{ cssVar }}</div>
-		</div>
-	`,
+const SwatchCard: FunctionalComponent<{ label: string; cssVar: string }> = (props) => {
+	return h("div", { class: "text-center" }, [
+		h("div", {
+			class: "h-14 rounded-lg mb-1.5",
+			style: { backgroundColor: `var(${props.cssVar}, #ccc)` },
+		}),
+		h("div", { class: "text-xs font-medium preview-text" }, props.label),
+		h("div", { class: "text-[10px] preview-muted font-mono" }, props.cssVar),
+	])
 }
+SwatchCard.props = ["label", "cssVar"] as any
 
 // ─── Static data ──────────────────────────────────────────────────
 
