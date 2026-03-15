@@ -4,31 +4,49 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "tab_theme",
-  "section_identity",
+  "tab_colors",
+  "section_brand",
   "theme_name",
   "primary_color",
   "secondary_color",
-  "column_break_identity",
+  "column_break_brand2",
   "font_family",
-  "font_size",
+  "heading_font_family",
   "dark_mode",
-  "section_colors",
+  "section_status",
   "accent_color",
   "success_color",
-  "column_break_colors2",
+  "info_color",
+  "column_break_status2",
   "warning_color",
   "danger_color",
   "section_text",
   "text_color",
+  "heading_color",
   "muted_color",
   "column_break_text",
   "link_color",
+  "focus_color",
+  "section_surfaces",
+  "background_color",
+  "surface_color",
+  "column_break_surfaces",
+  "border_color",
+  "tab_typography",
+  "section_type_settings",
+  "font_size",
+  "line_height",
+  "column_break_type",
+  "font_weight_body",
+  "tab_layout",
   "section_layout",
   "border_radius",
   "spacing_scale",
+  "shadow",
   "column_break_layout",
   "sidebar_width",
+  "container_max_width",
+  "transition_speed",
   "tab_advanced",
   "section_theme_json",
   "theme_json",
@@ -42,12 +60,12 @@
  ],
  "fields": [
   {
-   "fieldname": "tab_theme",
+   "fieldname": "tab_colors",
    "fieldtype": "Tab Break",
-   "label": "Theme"
+   "label": "Colors"
   },
   {
-   "fieldname": "section_identity",
+   "fieldname": "section_brand",
    "fieldtype": "Section Break",
    "label": "Brand"
   },
@@ -72,22 +90,22 @@
    "default": "#10B981"
   },
   {
-   "fieldname": "column_break_identity",
+   "fieldname": "column_break_brand2",
    "fieldtype": "Column Break"
   },
   {
    "fieldname": "font_family",
    "fieldtype": "Select",
-   "label": "Font Family",
+   "label": "Body Font",
    "default": "Inter",
    "options": "Inter\nSource Sans 3\nOpen Sans\nRoboto\nLato\nPoppins\nNunito\nSystem Default"
   },
   {
-   "fieldname": "font_size",
+   "fieldname": "heading_font_family",
    "fieldtype": "Select",
-   "label": "Base Font Size",
-   "default": "14px",
-   "options": "12px\n13px\n14px\n15px\n16px"
+   "label": "Heading Font",
+   "default": "Inter",
+   "options": "Inter\nSource Sans 3\nOpen Sans\nRoboto\nLato\nPoppins\nNunito\nSystem Default"
   },
   {
    "fieldname": "dark_mode",
@@ -96,36 +114,42 @@
    "default": "0"
   },
   {
-   "fieldname": "section_colors",
+   "fieldname": "section_status",
    "fieldtype": "Section Break",
    "label": "Status Colors"
   },
   {
    "fieldname": "accent_color",
    "fieldtype": "Color",
-   "label": "Accent Color",
-   "default": "#F59E0B"
+   "label": "Accent",
+   "default": "#8B5CF6"
   },
   {
    "fieldname": "success_color",
    "fieldtype": "Color",
-   "label": "Success Color",
+   "label": "Success",
    "default": "#10B981"
   },
   {
-   "fieldname": "column_break_colors2",
+   "fieldname": "info_color",
+   "fieldtype": "Color",
+   "label": "Info",
+   "default": "#3B82F6"
+  },
+  {
+   "fieldname": "column_break_status2",
    "fieldtype": "Column Break"
   },
   {
    "fieldname": "warning_color",
    "fieldtype": "Color",
-   "label": "Warning Color",
+   "label": "Warning",
    "default": "#F59E0B"
   },
   {
    "fieldname": "danger_color",
    "fieldtype": "Color",
-   "label": "Danger Color",
+   "label": "Danger",
    "default": "#EF4444"
   },
   {
@@ -136,13 +160,19 @@
   {
    "fieldname": "text_color",
    "fieldtype": "Color",
-   "label": "Text Color",
+   "label": "Body Text",
    "default": "#1F2937"
+  },
+  {
+   "fieldname": "heading_color",
+   "fieldtype": "Color",
+   "label": "Heading Text",
+   "default": "#111827"
   },
   {
    "fieldname": "muted_color",
    "fieldtype": "Color",
-   "label": "Muted Text Color",
+   "label": "Muted Text",
    "default": "#6B7280"
   },
   {
@@ -152,13 +182,86 @@
   {
    "fieldname": "link_color",
    "fieldtype": "Color",
-   "label": "Link Color",
+   "label": "Links",
    "default": "#3B82F6"
+  },
+  {
+   "fieldname": "focus_color",
+   "fieldtype": "Color",
+   "label": "Focus Ring",
+   "default": "#3B82F6"
+  },
+  {
+   "fieldname": "section_surfaces",
+   "fieldtype": "Section Break",
+   "label": "Surfaces"
+  },
+  {
+   "fieldname": "background_color",
+   "fieldtype": "Color",
+   "label": "Page Background",
+   "default": "#FFFFFF"
+  },
+  {
+   "fieldname": "surface_color",
+   "fieldtype": "Color",
+   "label": "Card / Panel",
+   "default": "#F9FAFB"
+  },
+  {
+   "fieldname": "column_break_surfaces",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "border_color",
+   "fieldtype": "Color",
+   "label": "Borders",
+   "default": "#E5E7EB"
+  },
+  {
+   "fieldname": "tab_typography",
+   "fieldtype": "Tab Break",
+   "label": "Typography"
+  },
+  {
+   "fieldname": "section_type_settings",
+   "fieldtype": "Section Break",
+   "label": "Type Settings"
+  },
+  {
+   "fieldname": "font_size",
+   "fieldtype": "Select",
+   "label": "Base Font Size",
+   "default": "14px",
+   "options": "12px\n13px\n14px\n15px\n16px\n18px"
+  },
+  {
+   "fieldname": "line_height",
+   "fieldtype": "Select",
+   "label": "Line Height",
+   "default": "normal",
+   "options": "tight\nsnug\nnormal\nrelaxed\nloose"
+  },
+  {
+   "fieldname": "column_break_type",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "font_weight_body",
+   "fieldtype": "Select",
+   "label": "Body Font Weight",
+   "default": "400",
+   "options": "300\n400\n500\n600"
+  },
+  {
+   "fieldname": "tab_layout",
+   "fieldtype": "Tab Break",
+   "label": "Layout"
   },
   {
    "fieldname": "section_layout",
    "fieldtype": "Section Break",
-   "label": "Layout"
+   "label": "Layout & Spacing"
   },
   {
    "fieldname": "border_radius",
@@ -175,6 +278,13 @@
    "options": "tight\nnormal\nrelaxed"
   },
   {
+   "fieldname": "shadow",
+   "fieldtype": "Select",
+   "label": "Shadow Depth",
+   "default": "md",
+   "options": "none\nsm\nmd\nlg\nxl"
+  },
+  {
    "fieldname": "column_break_layout",
    "fieldtype": "Column Break"
   },
@@ -184,6 +294,20 @@
    "label": "Sidebar Width",
    "default": "240px",
    "options": "200px\n220px\n240px\n260px\n280px"
+  },
+  {
+   "fieldname": "container_max_width",
+   "fieldtype": "Select",
+   "label": "Container Max Width",
+   "default": "1280px",
+   "options": "960px\n1024px\n1152px\n1280px\n1440px\nfull"
+  },
+  {
+   "fieldname": "transition_speed",
+   "fieldtype": "Select",
+   "label": "Transition Speed",
+   "default": "normal",
+   "options": "fast\nnormal\nslow"
   },
   {
    "fieldname": "tab_advanced",
