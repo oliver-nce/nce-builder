@@ -19,6 +19,18 @@ SPACING_SCALE_MAP = {
 	"relaxed": "1.5rem",
 }
 
+COLOR_FIELDS = {
+	"primary_color": "color-primary",
+	"secondary_color": "color-secondary",
+	"accent_color": "color-accent",
+	"success_color": "color-success",
+	"warning_color": "color-warning",
+	"danger_color": "color-danger",
+	"text_color": "color-text",
+	"muted_color": "color-muted",
+	"link_color": "color-link",
+}
+
 
 class NCEThemeSettings(Document):
 	def on_update(self):
@@ -30,17 +42,30 @@ class NCEThemeSettings(Document):
 	def _generate_css(self):
 		lines = [":root {"]
 
-		if self.primary_color:
-			lines.append(f"\t--nce-color-primary: {self.primary_color};")
+		for fieldname, var_name in COLOR_FIELDS.items():
+			value = self.get(fieldname)
+			if value:
+				lines.append(f"\t--nce-{var_name}: {value};")
 
-		if self.font_family:
+		if self.font_family and self.font_family != "System Default":
 			lines.append(f"\t--nce-font-family: '{self.font_family}', sans-serif;")
+		elif self.font_family == "System Default":
+			lines.append(
+				"\t--nce-font-family: -apple-system, BlinkMacSystemFont, "
+				"'Segoe UI', Roboto, sans-serif;"
+			)
+
+		if self.font_size:
+			lines.append(f"\t--nce-font-size: {self.font_size};")
 
 		radius = BORDER_RADIUS_MAP.get(self.border_radius or "md", "0.375rem")
 		lines.append(f"\t--nce-border-radius: {radius};")
 
 		spacing = SPACING_SCALE_MAP.get(self.spacing_scale or "normal", "1rem")
 		lines.append(f"\t--nce-spacing-base: {spacing};")
+
+		if self.sidebar_width:
+			lines.append(f"\t--nce-sidebar-width: {self.sidebar_width};")
 
 		if self.tailwind_overrides:
 			try:
