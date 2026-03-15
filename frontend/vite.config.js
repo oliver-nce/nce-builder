@@ -14,6 +14,7 @@ function stubIconsPlugin() {
 }
 
 export default defineConfig({
+	base: "/assets/nce_builder/frontend/",
 	plugins: [stubIconsPlugin(), vue()],
 	resolve: {
 		alias: {
