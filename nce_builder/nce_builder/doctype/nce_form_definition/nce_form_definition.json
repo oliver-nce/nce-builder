@@ -1,0 +1,188 @@
+{
+ "actions": [],
+ "autoname": "field:form_name",
+ "creation": "2026-03-15 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "form_name",
+  "title",
+  "target_doctype",
+  "enabled",
+  "requires_login",
+  "section_schema",
+  "form_schema",
+  "column_break_mapping",
+  "field_mapping",
+  "section_layout",
+  "tab_layout",
+  "section_submission",
+  "on_submit_action",
+  "custom_api_method",
+  "section_scripts",
+  "on_load_script",
+  "on_submit_script",
+  "section_validation",
+  "validation_rules",
+  "section_access",
+  "allowed_roles"
+ ],
+ "fields": [
+  {
+   "description": "URL-safe identifier (e.g. customer-form)",
+   "fieldname": "form_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Form Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Target DocType",
+   "options": "DocType",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "default": "1",
+   "fieldname": "requires_login",
+   "fieldtype": "Check",
+   "label": "Requires Login"
+  },
+  {
+   "fieldname": "section_schema",
+   "fieldtype": "Section Break",
+   "label": "Form Schema"
+  },
+  {
+   "description": "FormKit JSON schema array",
+   "fieldname": "form_schema",
+   "fieldtype": "Code",
+   "label": "Form Schema",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "column_break_mapping",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Map FormKit field names to DocType fieldnames",
+   "fieldname": "field_mapping",
+   "fieldtype": "Code",
+   "label": "Field Mapping",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "section_layout",
+   "fieldtype": "Section Break",
+   "label": "Layout"
+  },
+  {
+   "description": "Tab structure definition (optional)",
+   "fieldname": "tab_layout",
+   "fieldtype": "Code",
+   "label": "Tab Layout",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "section_submission",
+   "fieldtype": "Section Break",
+   "label": "Submission"
+  },
+  {
+   "default": "save",
+   "fieldname": "on_submit_action",
+   "fieldtype": "Select",
+   "label": "On Submit Action",
+   "options": "save\nsubmit\nworkflow\ncustom_api"
+  },
+  {
+   "depends_on": "eval:doc.on_submit_action=='custom_api'",
+   "description": "Dotted path to whitelisted method",
+   "fieldname": "custom_api_method",
+   "fieldtype": "Data",
+   "label": "Custom API Method"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_scripts",
+   "fieldtype": "Section Break",
+   "label": "Scripts"
+  },
+  {
+   "fieldname": "on_load_script",
+   "fieldtype": "Code",
+   "label": "On Load Script",
+   "options": "JS"
+  },
+  {
+   "fieldname": "on_submit_script",
+   "fieldtype": "Code",
+   "label": "On Submit Script",
+   "options": "JS"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_validation",
+   "fieldtype": "Section Break",
+   "label": "Validation"
+  },
+  {
+   "description": "Server-side validation rules",
+   "fieldname": "validation_rules",
+   "fieldtype": "Code",
+   "label": "Validation Rules",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "section_access",
+   "fieldtype": "Section Break",
+   "label": "Access Control"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "NCE Allowed Role"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-15 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "NCE Builder",
+ "name": "NCE Form Definition",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "title",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

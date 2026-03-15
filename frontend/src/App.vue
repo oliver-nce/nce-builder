@@ -25,5 +25,6 @@
 <script setup lang="ts">
 const navLinks = [
 	{ label: "Theme Settings", to: "/nce/theme-settings" },
+	{ label: "Forms", to: "/nce/form" },
 ]
 </script>
