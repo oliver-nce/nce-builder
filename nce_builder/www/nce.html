@@ -4,6 +4,7 @@
 
 {%- block head_include -%}
 <link rel="stylesheet" href="/assets/nce_builder/frontend/assets/nce-builder.css">
+<script>window.csrf_token = "{{ frappe.session.csrf_token }}";</script>
 {%- endblock -%}
 
 {%- block page_content -%}
