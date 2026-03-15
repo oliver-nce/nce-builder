@@ -9,7 +9,7 @@
 
 			<!-- ═══════ TYPOGRAPHY ═══════ -->
 			<section>
-				<SectionLabel>Typography</SectionLabel>
+				<h2 class="section-label">Typography</h2>
 				<div class="preview-surface rounded-xl p-8 space-y-4">
 					<h1 class="preview-heading text-4xl font-bold">Main Page Heading</h1>
 					<h2 class="preview-heading text-2xl font-semibold">Section Heading</h2>
@@ -34,20 +34,22 @@
 
 			<!-- ═══════ COLOUR SWATCHES ═══════ -->
 			<section>
-				<SectionLabel>Colour Palette</SectionLabel>
+				<h2 class="section-label">Colour Palette</h2>
 				<div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-					<SwatchCard
-						v-for="c in paletteColors"
-						:key="c.var"
-						:label="c.label"
-						:css-var="c.var"
-					/>
+					<div v-for="c in paletteColors" :key="c.var" class="text-center">
+						<div
+							class="h-14 rounded-lg mb-1.5"
+							:style="{ backgroundColor: `var(${c.var}, #ccc)` }"
+						/>
+						<div class="text-xs font-medium preview-text">{{ c.label }}</div>
+						<div class="text-[10px] preview-muted font-mono">{{ c.var }}</div>
+					</div>
 				</div>
 			</section>
 
 			<!-- ═══════ BUTTONS ═══════ -->
 			<section>
-				<SectionLabel>Buttons</SectionLabel>
+				<h2 class="section-label">Buttons</h2>
 				<div class="preview-surface rounded-xl p-8 space-y-4">
 					<div class="flex flex-wrap gap-3">
 						<button class="btn btn-primary">Primary Action</button>
@@ -75,7 +77,7 @@
 
 			<!-- ═══════ FORM ELEMENTS ═══════ -->
 			<section>
-				<SectionLabel>Form Elements</SectionLabel>
+				<h2 class="section-label">Form Elements</h2>
 				<div class="preview-surface rounded-xl p-8">
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 						<div>
@@ -136,7 +138,7 @@
 
 			<!-- ═══════ BADGES & TAGS ═══════ -->
 			<section>
-				<SectionLabel>Badges &amp; Tags</SectionLabel>
+				<h2 class="section-label">Badges &amp; Tags</h2>
 				<div class="preview-surface rounded-xl p-8 space-y-4">
 					<div class="flex flex-wrap gap-2">
 						<span class="badge badge-primary">Primary</span>
@@ -159,7 +161,7 @@
 
 			<!-- ═══════ ALERTS ═══════ -->
 			<section>
-				<SectionLabel>Alerts &amp; Banners</SectionLabel>
+				<h2 class="section-label">Alerts &amp; Banners</h2>
 				<div class="space-y-3">
 					<div class="alert alert-success">
 						<strong>Success!</strong> Your changes have been saved successfully.
@@ -178,7 +180,7 @@
 
 			<!-- ═══════ DATA TABLE ═══════ -->
 			<section>
-				<SectionLabel>Data Table</SectionLabel>
+				<h2 class="section-label">Data Table</h2>
 				<div class="preview-surface rounded-xl overflow-hidden">
 					<table class="w-full text-sm">
 						<thead>
@@ -215,7 +217,7 @@
 
 			<!-- ═══════ CARDS ═══════ -->
 			<section>
-				<SectionLabel>Cards</SectionLabel>
+				<h2 class="section-label">Cards</h2>
 				<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 					<div class="card">
 						<div class="text-3xl font-bold preview-heading">1,247</div>
@@ -267,7 +269,7 @@
 
 			<!-- ═══════ PROGRESS BARS ═══════ -->
 			<section>
-				<SectionLabel>Progress Bars</SectionLabel>
+				<h2 class="section-label">Progress Bars</h2>
 				<div class="preview-surface rounded-xl p-8 space-y-5">
 					<div v-for="bar in progressBars" :key="bar.label">
 						<div class="flex justify-between text-sm mb-1">
@@ -289,7 +291,7 @@
 
 			<!-- ═══════ NAVIGATION / BREADCRUMBS / TABS ═══════ -->
 			<section>
-				<SectionLabel>Navigation</SectionLabel>
+				<h2 class="section-label">Navigation</h2>
 				<div class="preview-surface rounded-xl p-8 space-y-6">
 					<!-- Breadcrumb -->
 					<nav class="flex items-center gap-2 text-sm">
@@ -330,7 +332,7 @@
 
 			<!-- ═══════ SHADOW COMPARISON ═══════ -->
 			<section>
-				<SectionLabel>Shadows &amp; Radii</SectionLabel>
+				<h2 class="section-label">Shadows &amp; Radii</h2>
 				<div class="grid grid-cols-5 gap-4">
 					<div
 						v-for="s in ['none','sm','md','lg','xl']"
@@ -350,25 +352,7 @@
 </template>
 
 <script setup lang="ts">
-import { h, computed, onMounted, onUnmounted, type FunctionalComponent } from "vue"
-
-// ─── Inline sub-components (render functions, no template compiler needed) ──
-
-const SectionLabel: FunctionalComponent = (_props, { slots }) => {
-	return h("h2", { class: "text-xs font-bold uppercase tracking-widest preview-muted mb-3" }, slots.default?.())
-}
-
-const SwatchCard: FunctionalComponent<{ label: string; cssVar: string }> = (props) => {
-	return h("div", { class: "text-center" }, [
-		h("div", {
-			class: "h-14 rounded-lg mb-1.5",
-			style: { backgroundColor: `var(${props.cssVar}, #ccc)` },
-		}),
-		h("div", { class: "text-xs font-medium preview-text" }, props.label),
-		h("div", { class: "text-[10px] preview-muted font-mono" }, props.cssVar),
-	])
-}
-SwatchCard.props = ["label", "cssVar"] as any
+import { computed, onMounted, onUnmounted } from "vue"
 
 // ─── Static data ──────────────────────────────────────────────────
 
@@ -442,6 +426,15 @@ onUnmounted(() => window.removeEventListener("message", handleMessage))
 
 <style scoped>
 /* ── Semantic classes mapped to CSS variables ── */
+
+.section-label {
+	font-size: 0.6875rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--nce-color-muted, #6b7280);
+	margin-bottom: 0.75rem;
+}
 
 .preview-page {
 	background-color: var(--nce-color-bg, #ffffff);

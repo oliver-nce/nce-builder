@@ -1,5 +1,8 @@
 <template>
-	<div id="nce-builder-app" class="h-screen flex">
+	<!-- Standalone pages (e.g. preview) render without the shell -->
+	<router-view v-if="route.meta.standalone" />
+
+	<div v-else id="nce-builder-app" class="h-screen flex">
 		<aside class="w-56 border-r bg-gray-50 dark:bg-gray-900 flex flex-col">
 			<div class="px-4 py-3 font-semibold text-sm text-gray-700 dark:text-gray-200 border-b">
 				NCE Builder
@@ -23,6 +26,10 @@
 </template>
 
 <script setup lang="ts">
+import { useRoute } from "vue-router"
+
+const route = useRoute()
+
 const navLinks = [
 	{ label: "Theme Settings", to: "/nce/theme-settings" },
 	{ label: "Forms", to: "/nce/form" },

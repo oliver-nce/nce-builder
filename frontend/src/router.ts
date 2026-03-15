@@ -10,6 +10,7 @@ const routes = [
 		path: "/nce/preview",
 		name: "ThemePreview",
 		component: () => import("@/pages/ThemePreviewPage.vue"),
+		meta: { standalone: true },
 	},
 	{
 		path: "/nce/form/:formName",
