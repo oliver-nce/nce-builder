@@ -34,4 +34,4 @@ var/
 
 # Frappe build output
 nce_builder/public/dist/
-nce_builder/public/frontend/
+*.map
