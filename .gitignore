@@ -14,7 +14,14 @@ dist/
 .nuxt/
 .output/
 
-# PHP (legacy)
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+
+# PHP (legacy, no longer in repo)
 /vendor/
 /composer.lock
 /.phpunit.cache/
@@ -25,10 +32,5 @@ dist/
 var/
 *.log
 
-# Legacy project files (removed from tracking)
-/context/
-/wp-content/
-/composer.json
-/phpcs.xml
-/phpstan.neon.dist
-/phpunit.xml.dist
+# Frappe
+nce_builder/public/dist/
