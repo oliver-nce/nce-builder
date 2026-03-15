@@ -1,9 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node / JS
+node_modules/
+dist/
+.nuxt/
+.output/
+
+# PHP (legacy)
 /vendor/
 /composer.lock
 /.phpunit.cache/
 /.phpunit.result.cache
 /.php-cs-fixer.cache
-/.DS_Store
-/.idea/
-/.vscode/
+
+# Build / cache
 var/
+*.log
+
+# Legacy project files (removed from tracking)
+/context/
+/wp-content/
+/composer.json
+/phpcs.xml
+/phpstan.neon.dist
+/phpunit.xml.dist
