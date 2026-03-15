@@ -1,0 +1,15 @@
+When implementing code, generating functions, writing tests, or creating 
+new files, use the ollama ask_model tool with model qwen3-coder-next 
+to generate the code.
+
+Use your own reasoning for:
+- Architecture decisions and planning
+- Code review and quality assessment  
+- Breaking down complex tasks into steps
+- Deciding what files to create or modify
+
+Delegate to qwen3-coder-next for:
+- Writing the actual code implementations
+- Generating boilerplate and templates
+- Writing test cases
+- Creating Frappe doctypes, controllers, and client scripts
