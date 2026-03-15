@@ -7,6 +7,11 @@ const routes = [
 		component: () => import("@/pages/ThemeSettingsPage.vue"),
 	},
 	{
+		path: "/nce/preview",
+		name: "ThemePreview",
+		component: () => import("@/pages/ThemePreviewPage.vue"),
+	},
+	{
 		path: "/nce/form/:formName",
 		name: "FormNew",
 		component: () => import("@/pages/FormPage.vue"),

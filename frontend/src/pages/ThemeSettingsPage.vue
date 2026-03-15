@@ -9,6 +9,9 @@
 				</p>
 			</div>
 			<div class="flex gap-2">
+				<Button variant="outline" @click="openPreview">
+					Open Preview ↗
+				</Button>
 				<Button
 					variant="outline"
 					:loading="regenerating"
@@ -296,7 +299,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed } from "vue"
+import { ref, reactive, watch, computed, onUnmounted } from "vue"
 import { createResource } from "frappe-ui"
 import { generateShades, isDark, type ColorShade } from "@/utils/color-shades"
 
@@ -383,6 +386,94 @@ const SelectField = {
 		</div>
 	`,
 }
+
+// ─── Preview window ───────────────────────────────────────────────
+
+let previewWin: Window | null = null
+
+function openPreview() {
+	if (previewWin && !previewWin.closed) {
+		previewWin.focus()
+		return
+	}
+	previewWin = window.open(
+		"/nce/preview",
+		"nce-preview",
+		"width=1200,height=900,scrollbars=yes",
+	)
+}
+
+const COLOR_VAR_MAP: Record<string, string> = {
+	primary_color: "--nce-color-primary",
+	secondary_color: "--nce-color-secondary",
+	accent_color: "--nce-color-accent",
+	success_color: "--nce-color-success",
+	info_color: "--nce-color-info",
+	warning_color: "--nce-color-warning",
+	danger_color: "--nce-color-danger",
+	text_color: "--nce-color-text",
+	heading_color: "--nce-color-heading",
+	muted_color: "--nce-color-muted",
+	link_color: "--nce-color-link",
+	focus_color: "--nce-color-focus",
+	background_color: "--nce-color-bg",
+	surface_color: "--nce-color-surface",
+	border_color: "--nce-color-border",
+}
+
+const BORDER_RADIUS_CSS: Record<string, string> = {
+	none: "0", sm: "0.125rem", md: "0.375rem", lg: "0.5rem", full: "9999px",
+}
+
+const SHADOW_CSS: Record<string, string> = {
+	none: "none",
+	sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+	md: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+	lg: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+	xl: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+}
+
+const TRANSITION_CSS: Record<string, string> = { fast: "150ms", normal: "200ms", slow: "300ms" }
+const LINE_HEIGHT_CSS: Record<string, string> = { tight: "1.25", snug: "1.375", normal: "1.5", relaxed: "1.625", loose: "2" }
+
+function computeCSSVariables(): Record<string, string> {
+	const vars: Record<string, string> = {}
+	for (const [field, cssVar] of Object.entries(COLOR_VAR_MAP)) {
+		if (form[field as FormKey]) vars[cssVar] = form[field as FormKey]
+	}
+	const ff = form.font_family
+	if (ff && ff !== "System Default") vars["--nce-font-family"] = `'${ff}', sans-serif`
+	else if (ff === "System Default") vars["--nce-font-family"] = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+
+	const hf = form.heading_font_family
+	if (hf && hf !== "System Default") vars["--nce-font-heading"] = `'${hf}', sans-serif`
+	else if (hf === "System Default") vars["--nce-font-heading"] = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+
+	if (form.font_size) vars["--nce-font-size"] = form.font_size
+	if (form.font_weight_body) vars["--nce-font-weight"] = form.font_weight_body
+	if (form.line_height) vars["--nce-line-height"] = LINE_HEIGHT_CSS[form.line_height] || "1.5"
+	if (form.border_radius) vars["--nce-border-radius"] = BORDER_RADIUS_CSS[form.border_radius] || "0.375rem"
+	if (form.spacing_scale) {
+		const m: Record<string, string> = { tight: "0.75rem", normal: "1rem", relaxed: "1.5rem" }
+		vars["--nce-spacing-base"] = m[form.spacing_scale] || "1rem"
+	}
+	if (form.shadow) vars["--nce-shadow"] = SHADOW_CSS[form.shadow] || SHADOW_CSS.md
+	if (form.transition_speed) vars["--nce-transition-speed"] = TRANSITION_CSS[form.transition_speed] || "200ms"
+	if (form.sidebar_width) vars["--nce-sidebar-width"] = form.sidebar_width
+	if (form.container_max_width) {
+		vars["--nce-container-max-width"] = form.container_max_width === "full" ? "100%" : form.container_max_width
+	}
+	return vars
+}
+
+function pushToPreview() {
+	if (!previewWin || previewWin.closed) return
+	previewWin.postMessage({ type: "nce-theme-update", variables: computeCSSVariables() }, "*")
+}
+
+onUnmounted(() => {
+	if (previewWin && !previewWin.closed) previewWin.close()
+})
 
 // ─── State ────────────────────────────────────────────────────────
 
@@ -605,6 +696,13 @@ function regenerateCSS() {
 	regenerating.value = true
 	regenerateResource.submit({})
 }
+
+// Push live changes to the preview window (debounced)
+let pushTimer: ReturnType<typeof setTimeout> | null = null
+watch(form, () => {
+	if (pushTimer) clearTimeout(pushTimer)
+	pushTimer = setTimeout(pushToPreview, 80)
+}, { deep: true })
 </script>
 
 <style scoped>
