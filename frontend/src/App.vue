@@ -1,6 +1,6 @@
 <template>
 	<!-- Standalone pages (e.g. preview) render without the shell -->
-	<router-view v-if="route.meta.standalone" />
+	<router-view v-if="isStandalone" />
 
 	<div v-else id="nce-builder-app" class="h-screen flex">
 		<aside class="w-56 border-r bg-gray-50 dark:bg-gray-900 flex flex-col">
@@ -26,9 +26,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue"
 import { useRoute } from "vue-router"
 
 const route = useRoute()
+const isStandalone = computed(() => !!route.meta.standalone)
 
 const navLinks = [
 	{ label: "Theme Settings", to: "/nce/theme-settings" },

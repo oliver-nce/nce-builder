@@ -3,11 +3,13 @@
 {%- block title -%}NCE Builder{%- endblock -%}
 
 {%- block head_include -%}
-<link rel="stylesheet" href="/assets/nce_builder/frontend/assets/nce-builder.css">
+{%- set _v = frappe.utils.now_datetime().timestamp() | int -%}
+<link rel="stylesheet" href="/assets/nce_builder/frontend/assets/nce-builder.css?v={{ _v }}">
 <script>window.csrf_token = "{{ frappe.session.csrf_token }}";</script>
 {%- endblock -%}
 
 {%- block page_content -%}
 <div id="app"></div>
-<script type="module" src="/assets/nce_builder/frontend/assets/nce-builder.js"></script>
+{%- set _v = frappe.utils.now_datetime().timestamp() | int -%}
+<script type="module" src="/assets/nce_builder/frontend/assets/nce-builder.js?v={{ _v }}"></script>
 {%- endblock -%}
