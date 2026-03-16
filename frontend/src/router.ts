@@ -23,6 +23,11 @@ const routes = [
 		meta: { standalone: true },
 	},
 	{
+		path: "/nce/forms",
+		name: "FormList",
+		component: () => import("@/pages/FormListPage.vue"),
+	},
+	{
 		path: "/nce/form/:formName",
 		name: "FormNew",
 		component: () => import("@/pages/FormPage.vue"),

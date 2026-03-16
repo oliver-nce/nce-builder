@@ -35,6 +35,6 @@ const isStandalone = computed(() => !!route.meta.standalone)
 const navLinks = [
 	{ label: "Theme Settings", to: "/nce/theme-settings" },
 	{ label: "Form Builder", to: "/nce/builder/new" },
-	{ label: "Forms", to: "/nce/form" },
+	{ label: "Forms", to: "/nce/forms" },
 ]
 </script>

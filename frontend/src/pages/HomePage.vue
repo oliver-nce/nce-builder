@@ -16,7 +16,7 @@
 				<div class="card-desc">Design drag-and-drop forms on a grid canvas.</div>
 			</router-link>
 
-			<router-link to="/nce/form" class="home-card">
+			<router-link to="/nce/forms" class="home-card">
 				<div class="card-icon">📋</div>
 				<div class="card-label">Forms</div>
 				<div class="card-desc">View and manage saved form definitions.</div>
