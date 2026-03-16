@@ -4,7 +4,7 @@ app_publisher = "Oliver Reid"
 app_description = "NCE Builder — Site-wide theming and dynamic form rendering for Frappe"
 app_email = "oliver_reid@me.com"
 app_license = "mit"
-app_logo_url = "/assets/nce_builder/images/logo.png"
+app_logo_url = "/assets/nce_builder/images/logo.jpg"
 
 # Inject theme CSS on every page (site-wide theming)
 app_include_css = ["/assets/nce_builder/css/nce_theme.css"]
@@ -17,8 +17,8 @@ website_route_rules = [
 add_to_apps_screen = [
 	{
 		"name": "nce_builder",
-		"logo": "/assets/nce_builder/images/logo.png",
+		"logo": "/assets/nce_builder/images/logo.jpg",
 		"title": "NCE Builder",
-		"route": "/nce",
+		"route": "/app/nce-builder",
 	}
 ]

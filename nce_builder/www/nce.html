@@ -2,14 +2,10 @@
 
 {%- block title -%}NCE Builder{%- endblock -%}
 
-{%- block navbar -%}{%- endblock -%}
-{%- block breadcrumbs -%}{%- endblock -%}
-
 {%- block head_include -%}
 {%- set _v = frappe.utils.now_datetime().timestamp() | int -%}
 <link rel="stylesheet" href="/assets/nce_builder/frontend/assets/nce-builder.css?v={{ _v }}">
 <script>window.csrf_token = "{{ frappe.session.csrf_token }}";</script>
-<style>.web-footer, .footer { display: none !important; }</style>
 {%- endblock -%}
 
 {%- block page_content -%}
