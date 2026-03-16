@@ -320,6 +320,7 @@ let previewWin: Window | null = null
 function openPreview() {
 	if (previewWin && !previewWin.closed) {
 		previewWin.focus()
+		pushToPreview()
 		return
 	}
 	previewWin = window.open(
@@ -327,6 +328,9 @@ function openPreview() {
 		"nce-preview",
 		"width=1200,height=900,scrollbars=yes",
 	)
+	if (previewWin) {
+		previewWin.addEventListener("load", () => pushToPreview())
+	}
 }
 
 const COLOR_VAR_MAP: Record<string, string> = {

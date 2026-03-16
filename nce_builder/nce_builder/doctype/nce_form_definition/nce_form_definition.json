@@ -16,6 +16,8 @@
   "field_mapping",
   "section_layout",
   "tab_layout",
+  "grid_layout",
+  "grid_config",
   "section_submission",
   "on_submit_action",
   "custom_api_method",
@@ -97,6 +99,20 @@
    "fieldname": "tab_layout",
    "fieldtype": "Code",
    "label": "Tab Layout",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "grid_layout",
+   "fieldtype": "Code",
+   "label": "Grid Layout",
+   "description": "JSON array of element positions [{id,type,x,y,w,h,config}]",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "grid_config",
+   "fieldtype": "Code",
+   "label": "Grid Config",
+   "description": "Grid settings {columns,rowHeight,gap}",
    "options": "JSON"
   },
   {
