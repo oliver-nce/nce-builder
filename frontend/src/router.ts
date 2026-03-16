@@ -14,10 +14,7 @@ const routes = [
 	},
 	{
 		path: "/nce/builder",
-		beforeEnter() {
-			window.location.href = "/app/nce-builder"
-		},
-		component: () => import("@/pages/FormBuilderPage.vue"),
+		redirect: "/nce/theme-settings",
 	},
 	{
 		path: "/nce/builder/:formName",
@@ -37,10 +34,7 @@ const routes = [
 	},
 	{
 		path: "/nce",
-		beforeEnter() {
-			window.location.href = "/app/nce-builder"
-		},
-		component: () => import("@/pages/ThemeSettingsPage.vue"),
+		redirect: "/nce/theme-settings",
 	},
 ]
 
