@@ -68,7 +68,7 @@
 				<section>
 					<h2 class="section-title">Brand Colours</h2>
 					<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-						<ColorField
+						<BrandColorPicker
 							v-for="c in brandColors"
 							:key="c.key"
 							:label="c.label"
@@ -309,7 +309,7 @@
 import { ref, reactive, watch, computed, onUnmounted } from "vue"
 import { createResource } from "frappe-ui"
 import { generateShades, isDark, type ColorShade } from "@/utils/color-shades"
-import ColorField from "@/components/ColorField.vue"
+import BrandColorPicker from "@/components/BrandColorPicker.vue"
 import SelectField from "@/components/SelectField.vue"
 import SwatchPicker from "@/components/SwatchPicker.vue"
 
