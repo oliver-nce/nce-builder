@@ -21,11 +21,18 @@
 			<span class="toolbar-label">px</span>
 
 			<label class="toolbar-label">DocType:</label>
-			<input
+			<select
 				v-model="state.targetDoctype"
-				class="toolbar-input"
-				placeholder="e.g. Customer"
-			/>
+				class="toolbar-select"
+				:disabled="!doctypeOptions.length"
+			>
+				<option value="" disabled>
+					{{ doctypeOptions.length ? '— pick a DocType —' : 'Loading…' }}
+				</option>
+				<option v-for="dt in doctypeOptions" :key="dt" :value="dt">
+					{{ dt }}
+				</option>
+			</select>
 
 			<button class="save-btn" :disabled="saving" @click="onSave">
 				{{ saving ? 'Saving...' : 'Save' }}
@@ -63,13 +70,14 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue"
-import { useRoute } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { useBuilderState } from "@/composables/useBuilderState"
 import ElementPalette from "@/components/builder/ElementPalette.vue"
 import BuilderCanvas from "@/components/builder/BuilderCanvas.vue"
 import PropertyPanel from "@/components/builder/PropertyPanel.vue"
 
 const route = useRoute()
+const router = useRouter()
 const formName = route.params.formName as string
 
 const {
@@ -88,20 +96,42 @@ const {
 const saving = ref(false)
 const primaryColor = ref("#0242A8")
 const secondaryColor = ref("#F5D06C")
+const doctypeOptions = ref<string[]>([])
+
+async function fetchDoctypeOptions() {
+	try {
+		const res = await fetch(
+			'/api/resource/WP Tables?fields=["name"]&order_by=name asc&limit_page_length=0',
+			{ credentials: 'include' }
+		)
+		if (!res.ok) return
+		const json = await res.json()
+		doctypeOptions.value = (json.data || []).map((r: any) => r.name)
+	} catch {
+		// WP Tables may not exist yet — leave empty
+	}
+}
 
 async function onSave() {
+	if (!state.title) { alert("Please enter a form title."); return }
+	if (!state.targetDoctype) { alert("Please enter a target DocType."); return }
+
 	saving.value = true
 	try {
-		await save()
+		const savedName = await save()
+		if (formName === "new" && savedName !== "new") {
+			router.replace({ name: "FormBuilder", params: { formName: savedName } })
+		}
 		alert("Saved!")
-	} catch {
-		alert("Save failed")
+	} catch (e: any) {
+		alert(e.message || "Save failed")
 	} finally {
 		saving.value = false
 	}
 }
 
 onMounted(async () => {
+	fetchDoctypeOptions()
 	if (formName !== "new") {
 		await load()
 	}
@@ -136,13 +166,17 @@ onMounted(async () => {
 .title-input::placeholder { color: #d1d5db; }
 .toolbar-spacer { flex: 1; }
 .toolbar-label { font-size: 12px; color: #6b7280; }
-.toolbar-input {
+.toolbar-select {
 	font-size: 13px;
 	border: 1px solid #d1d5db;
 	border-radius: 4px;
 	padding: 4px 8px;
-	width: 160px;
+	min-width: 180px;
+	background: #fff;
+	color: #111827;
+	cursor: pointer;
 }
+.toolbar-select:disabled { color: #9ca3af; cursor: wait; }
 .toolbar-input-sm {
 	font-size: 13px;
 	border: 1px solid #d1d5db;

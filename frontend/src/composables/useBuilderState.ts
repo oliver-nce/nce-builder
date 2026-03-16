@@ -131,7 +131,11 @@ export function useBuilderState(formName: string) {
     }
   }
 
-  async function save(): Promise<void> {
+  function toSlug(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  }
+
+  async function save(): Promise<string> {
     const { grid_layout, grid_config } = serialise()
 
     const headers: Record<string, string> = {
@@ -139,29 +143,54 @@ export function useBuilderState(formName: string) {
       'X-Frappe-CSRF-Token': (window as any).csrf_token
     }
 
-    await fetch('/api/method/frappe.client.set_value', {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify({
-        doctype: 'NCE Form Definition',
-        name: state.formName,
-        fieldname: 'grid_layout',
-        value: grid_layout
-      })
-    })
+    const isNew = state.formName === 'new' || !state.formName
 
-    await fetch('/api/method/frappe.client.set_value', {
-      method: 'POST',
+    if (isNew) {
+      if (!state.title) throw new Error('Title is required')
+      if (!state.targetDoctype) throw new Error('Target DocType is required')
+
+      const slug = toSlug(state.title) || `form-${Date.now()}`
+
+      const res = await fetch('/api/resource/NCE Form Definition', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          form_name: slug,
+          title: state.title,
+          target_doctype: state.targetDoctype,
+          enabled: 1,
+          grid_layout,
+          grid_config,
+        })
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err._server_messages || err.message || 'Create failed')
+      }
+
+      state.formName = slug
+      return slug
+    }
+
+    // Existing form — update all relevant fields in one call
+    const res = await fetch(`/api/resource/NCE Form Definition/${state.formName}`, {
+      method: 'PUT',
       headers,
       credentials: 'include',
       body: JSON.stringify({
-        doctype: 'NCE Form Definition',
-        name: state.formName,
-        fieldname: 'grid_config',
-        value: grid_config
+        title: state.title,
+        target_doctype: state.targetDoctype,
+        grid_layout,
+        grid_config,
       })
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err._server_messages || err.message || 'Save failed')
+    }
+
+    return state.formName
   }
 
   async function load(): Promise<void> {
