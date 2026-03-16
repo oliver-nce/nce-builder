@@ -13,6 +13,13 @@ const routes = [
 		meta: { standalone: true },
 	},
 	{
+		path: "/nce/builder",
+		beforeEnter() {
+			window.location.href = "/app/nce-builder"
+		},
+		component: () => import("@/pages/FormBuilderPage.vue"),
+	},
+	{
 		path: "/nce/builder/:formName",
 		name: "FormBuilder",
 		component: () => import("@/pages/FormBuilderPage.vue"),
