@@ -56,30 +56,29 @@ const emit = defineEmits<{
 
 const rootRef = ref<HTMLElement | null>(null)
 
-function getCellSize(): { cellW: number; cellH: number } {
-	const s = props.gridConfig.cellSize
-	return { cellW: s, cellH: s }
+// One grid step = cellSize + gap pixels
+function step(): number {
+	return props.gridConfig.cellSize + props.gridConfig.gap
 }
 
-// ── Move (mousedown on body, not corners) ──
+// ── Move: mousedown on body (not on resize handles) ──
 function onMouseDown(e: MouseEvent) {
 	if ((e.target as HTMLElement).classList.contains("handle")) return
+	e.preventDefault()
+	e.stopPropagation()
 
-	const startX = e.clientX
-	const startY = e.clientY
-	const origX = props.element.x
-	const origY = props.element.y
-	const { cellW, cellH } = getCellSize()
-	const gap = props.gridConfig.gap
+	const startMouse = { x: e.clientX, y: e.clientY }
+	const orig = { x: props.element.x, y: props.element.y }
+	const s = step()
 
 	function onMove(ev: MouseEvent) {
-		const dx = Math.round((ev.clientX - startX) / (cellW + gap))
-		const dy = Math.round((ev.clientY - startY) / (cellH + gap))
-		let nx = origX + dx
-		let ny = origY + dy
-		nx = Math.max(0, Math.min(nx, props.gridConfig.columns - props.element.w))
-		ny = Math.max(0, ny)
-		emit("move", nx, ny)
+		const dx = Math.round((ev.clientX - startMouse.x) / s)
+		const dy = Math.round((ev.clientY - startMouse.y) / s)
+		const nx = Math.max(0, orig.x + dx)
+		const ny = Math.max(0, orig.y + dy)
+		if (nx !== props.element.x || ny !== props.element.y) {
+			emit("move", nx, ny)
+		}
 	}
 
 	function onUp() {
@@ -89,25 +88,25 @@ function onMouseDown(e: MouseEvent) {
 
 	document.addEventListener("mousemove", onMove)
 	document.addEventListener("mouseup", onUp)
-	e.preventDefault()
 }
 
-// ── Resize (bottom-right handle only for PoC) ──
+// ── Resize: bottom-right handle ──
 function onResizeDown(e: MouseEvent) {
-	const startX = e.clientX
-	const startY = e.clientY
-	const origW = props.element.w
-	const origH = props.element.h
-	const { cellW, cellH } = getCellSize()
-	const gap = props.gridConfig.gap
+	e.preventDefault()
+	e.stopPropagation()
+
+	const startMouse = { x: e.clientX, y: e.clientY }
+	const orig = { w: props.element.w, h: props.element.h }
+	const s = step()
 
 	function onMove(ev: MouseEvent) {
-		const dw = Math.round((ev.clientX - startX) / (cellW + gap))
-		const dh = Math.round((ev.clientY - startY) / (cellH + gap))
-		let nw = Math.max(1, origW + dw)
-		let nh = Math.max(1, origH + dh)
-		nw = Math.min(nw, props.gridConfig.columns - props.element.x)
-		emit("resize", nw, nh)
+		const dw = Math.round((ev.clientX - startMouse.x) / s)
+		const dh = Math.round((ev.clientY - startMouse.y) / s)
+		const nw = Math.max(1, orig.w + dw)
+		const nh = Math.max(1, orig.h + dh)
+		if (nw !== props.element.w || nh !== props.element.h) {
+			emit("resize", nw, nh)
+		}
 	}
 
 	function onUp() {
@@ -117,7 +116,6 @@ function onResizeDown(e: MouseEvent) {
 
 	document.addEventListener("mousemove", onMove)
 	document.addEventListener("mouseup", onUp)
-	e.preventDefault()
 }
 </script>
 
