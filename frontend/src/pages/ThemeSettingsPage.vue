@@ -345,6 +345,7 @@ const COLOR_VAR_MAP: Record<string, string> = {
 	background_color: "--nce-color-bg",
 	surface_color: "--nce-color-surface",
 	border_color: "--nce-color-border",
+	row_alt_color: "--nce-color-row-alt",
 }
 
 const BORDER_RADIUS_CSS: Record<string, string> = {
@@ -447,6 +448,7 @@ const ALL_FIELDS = [
 	"background_color",
 	"surface_color",
 	"border_color",
+	"row_alt_color",
 	"font_family",
 	"heading_font_family",
 	"font_size",
@@ -483,6 +485,7 @@ const DEFAULTS: Record<FormKey, any> = {
 	background_color: "#FFFFFF",
 	surface_color: "#F9FAFB",
 	border_color: "#E5E7EB",
+	row_alt_color: "#F3F4F6",
 	font_family: "Inter",
 	heading_font_family: "Inter",
 	font_size: "14px",
@@ -529,6 +532,7 @@ const surfaceColors = [
 	{ key: "background_color", label: "Page Background" },
 	{ key: "surface_color", label: "Card / Panel" },
 	{ key: "border_color", label: "Borders" },
+	{ key: "row_alt_color", label: "Alternate Row" },
 ]
 
 // ─── Select options ───────────────────────────────────────────────

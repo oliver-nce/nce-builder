@@ -625,7 +625,7 @@ onUnmounted(() => window.removeEventListener("message", handleMessage))
 	background-color: var(--nce-color-bg, #ffffff);
 }
 .table-row-odd {
-	background-color: var(--nce-color-surface, #f9fafb);
+	background-color: var(--nce-color-row-alt, #f3f4f6);
 }
 
 /* ── Cards ── */

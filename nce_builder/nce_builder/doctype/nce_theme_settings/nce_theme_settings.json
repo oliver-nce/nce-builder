@@ -32,6 +32,7 @@
   "surface_color",
   "column_break_surfaces",
   "border_color",
+  "row_alt_color",
   "tab_typography",
   "section_type_settings",
   "font_size",
@@ -218,6 +219,13 @@
    "fieldtype": "Color",
    "label": "Borders",
    "default": "#E5E7EB"
+  },
+  {
+   "fieldname": "row_alt_color",
+   "fieldtype": "Color",
+   "label": "Alternate Row",
+   "default": "#F3F4F6",
+   "description": "Background for alternating table/list rows"
   },
   {
    "fieldname": "tab_typography",

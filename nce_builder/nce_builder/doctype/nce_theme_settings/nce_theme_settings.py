@@ -75,6 +75,7 @@ COLOR_FIELDS = {
 	"background_color": "color-bg",
 	"surface_color": "color-surface",
 	"border_color": "color-border",
+	"row_alt_color": "color-row-alt",
 }
 
 
