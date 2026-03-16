@@ -60,6 +60,7 @@
 			:root-doctype="state.targetDoctype"
 			mode="float"
 			:visible-tabs="['field']"
+			:meta-fetcher="spaMetaFetcher"
 			@select="onPathFinderSelect"
 			@close="onPathFinderClose"
 		/>
@@ -98,6 +99,26 @@ const secondaryColor = ref("#F5D06C")
 const doctypeOptions = ref<string[]>([])
 const showPathFinder = ref(false)
 const pathFinderTargetId = ref<string | null>(null)
+
+const spaMetaFetcher = {
+	async fetchMeta(doctype: string) {
+		const csrfToken = (window as any).csrf_token
+			|| document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1]
+			|| ""
+		const res = await fetch("/api/method/frappe.client.get", {
+			method: "POST",
+			credentials: "include",
+			headers: {
+				"X-Frappe-CSRF-Token": csrfToken,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ doctype: "DocType", name: doctype }),
+		})
+		if (!res.ok) throw new Error(`Failed to fetch meta for ${doctype}: ${res.status}`)
+		const result = await res.json()
+		return result.message || { fields: [] }
+	}
+}
 
 async function fetchDoctypeOptions() {
 	try {
