@@ -9,12 +9,16 @@
 			/>
 			<div class="toolbar-spacer" />
 
-			<label class="toolbar-label">Grid:</label>
-			<select v-model.number="state.gridConfig.columns" class="toolbar-select">
-				<option :value="12">12 col</option>
-				<option :value="16">16 col</option>
-				<option :value="24">24 col</option>
-			</select>
+			<label class="toolbar-label">Cell:</label>
+			<input
+				type="number"
+				v-model.number="state.gridConfig.cellSize"
+				class="toolbar-input-sm"
+				min="16"
+				max="80"
+				step="2"
+			/>
+			<span class="toolbar-label">px</span>
 
 			<label class="toolbar-label">DocType:</label>
 			<input
@@ -130,19 +134,20 @@ onMounted(async () => {
 .title-input::placeholder { color: #d1d5db; }
 .toolbar-spacer { flex: 1; }
 .toolbar-label { font-size: 12px; color: #6b7280; }
-.toolbar-select {
-	font-size: 13px;
-	border: 1px solid #d1d5db;
-	border-radius: 4px;
-	padding: 4px 8px;
-	background: #fff;
-}
 .toolbar-input {
 	font-size: 13px;
 	border: 1px solid #d1d5db;
 	border-radius: 4px;
 	padding: 4px 8px;
 	width: 160px;
+}
+.toolbar-input-sm {
+	font-size: 13px;
+	border: 1px solid #d1d5db;
+	border-radius: 4px;
+	padding: 4px 6px;
+	width: 56px;
+	text-align: center;
 }
 .save-btn {
 	padding: 6px 20px;

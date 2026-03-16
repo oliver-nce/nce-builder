@@ -57,11 +57,8 @@ const emit = defineEmits<{
 const rootRef = ref<HTMLElement | null>(null)
 
 function getCellSize(): { cellW: number; cellH: number } {
-	const el = rootRef.value
-	if (!el?.parentElement) return { cellW: 60, cellH: props.gridConfig.rowHeight }
-	const pw = el.parentElement.clientWidth - 32 // subtract canvas padding
-	const cellW = (pw - (props.gridConfig.columns - 1) * props.gridConfig.gap) / props.gridConfig.columns
-	return { cellW, cellH: props.gridConfig.rowHeight }
+	const s = props.gridConfig.cellSize
+	return { cellW: s, cellH: s }
 }
 
 // ── Move (mousedown on body, not corners) ──

@@ -21,8 +21,7 @@ export interface BuilderElement {
 }
 
 export interface GridConfig {
-  columns: number
-  rowHeight: number
+  cellSize: number
   gap: number
 }
 
@@ -41,9 +40,8 @@ export function useBuilderState(formName: string) {
     title: '',
     targetDoctype: '',
     gridConfig: {
-      columns: 12,
-      rowHeight: 48,
-      gap: 4
+      cellSize: 30,
+      gap: 1
     },
     elements: [],
     selectedId: null
@@ -98,7 +96,6 @@ export function useBuilderState(formName: string) {
     if (element) {
       element.x = Math.max(0, x)
       element.y = Math.max(0, y)
-      element.x = Math.min(element.x, state.gridConfig.columns - element.w)
     }
   }
 
@@ -107,7 +104,6 @@ export function useBuilderState(formName: string) {
     if (element) {
       element.w = Math.max(1, w)
       element.h = Math.max(1, h)
-      element.x = Math.min(element.x, state.gridConfig.columns - element.w)
     }
   }
 
@@ -179,7 +175,7 @@ export function useBuilderState(formName: string) {
           state.gridConfig = JSON.parse(resource.grid_config)
         }
       } catch {
-        state.gridConfig = { columns: 12, rowHeight: 48, gap: 4 }
+        state.gridConfig = { cellSize: 30, gap: 1 }
       }
     } catch {
       // fallback to defaults
