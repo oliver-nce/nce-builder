@@ -6,7 +6,6 @@
 		:style="{
 			gridColumn: `${element.x + 1} / span ${element.w}`,
 			gridRow: `${element.y + 1} / span ${element.h}`,
-			borderColor: selected ? '#3b82f6' : (element.config.frameColor || '#e5e7eb'),
 		}"
 		@mousedown="onMouseDown"
 		@click.stop="emit('select')"
@@ -128,19 +127,21 @@ function onResizeDown(e: MouseEvent) {
 <style scoped>
 .builder-element {
 	position: relative;
-	background: #ffffff;
-	border: 2px solid #e5e7eb;
-	border-radius: 6px;
+	background: var(--nce-color-surface, #ffffff);
+	border: 2px solid transparent;
+	border-radius: var(--nce-border-radius, 6px);
+	box-shadow: var(--nce-shadow, 0 1px 3px rgba(0,0,0,0.1));
 	cursor: move;
 	user-select: none;
 	z-index: 1;
-	transition: box-shadow 150ms ease;
+	transition: box-shadow 150ms ease, border-color 150ms ease;
 }
 .builder-element:hover {
-	box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--nce-shadow, 0 1px 3px rgba(0,0,0,0.1)), 0 0 0 1px rgba(59, 130, 246, 0.25);
 }
 .is-selected {
-	box-shadow: 0 0 0 1px #3b82f6, 0 2px 8px rgba(59, 130, 246, 0.15);
+	border-color: #3b82f6;
+	box-shadow: var(--nce-shadow, 0 1px 3px rgba(0,0,0,0.1)), 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 .el-content {
