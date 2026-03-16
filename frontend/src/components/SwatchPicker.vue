@@ -1,21 +1,37 @@
 <template>
-	<div>
-		<label class="block text-sm font-medium text-gray-700 mb-1.5">{{ label }}</label>
+	<div class="relative" ref="wrapper">
+		<label class="block text-sm font-medium text-gray-700 mb-1">{{ label }}</label>
 
-		<!-- Current value display -->
-		<div class="flex items-center gap-2 mb-2">
-			<div
-				class="w-8 h-8 rounded-md border border-gray-200"
+		<!-- Compact trigger -->
+		<button
+			type="button"
+			class="flex items-center gap-2 px-2 py-1.5 rounded-md border border-gray-200 hover:border-gray-300 bg-white transition-colors w-full"
+			@click="open = !open"
+		>
+			<span
+				class="w-6 h-6 rounded shrink-0 border border-gray-100"
 				:style="{ backgroundColor: modelValue || '#ffffff' }"
 			/>
-			<span class="text-xs font-mono text-gray-500">{{ modelValue || 'none' }}</span>
-		</div>
+			<span class="text-xs font-mono text-gray-600 truncate">{{ modelValue || '—' }}</span>
+			<span class="ml-auto text-gray-400 text-[10px]">&#9660;</span>
+		</button>
 
-		<!-- Swatch rows -->
-		<div class="space-y-1.5">
-			<div>
-				<div class="text-[10px] text-gray-400 mb-0.5">Primary</div>
-				<div class="flex gap-px rounded overflow-hidden">
+		<!-- Popover -->
+		<Teleport to="body">
+			<div
+				v-if="open"
+				class="fixed inset-0 z-40"
+				@click="open = false"
+			/>
+		</Teleport>
+		<div
+			v-if="open"
+			class="absolute z-50 mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-72"
+		>
+			<!-- Primary row -->
+			<div class="mb-2">
+				<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Primary</div>
+				<div class="grid grid-cols-11 gap-[5px]">
 					<button
 						v-for="s in primaryShades"
 						:key="'p-' + s.shade"
@@ -23,13 +39,15 @@
 						:class="{ 'swatch-active': modelValue === s.hex }"
 						:style="{ backgroundColor: s.hex }"
 						:title="s.shade + ' — ' + s.hex"
-						@click="$emit('update:modelValue', s.hex)"
+						@click="pick(s.hex)"
 					/>
 				</div>
 			</div>
-			<div>
-				<div class="text-[10px] text-gray-400 mb-0.5">Secondary</div>
-				<div class="flex gap-px rounded overflow-hidden">
+
+			<!-- Secondary row -->
+			<div class="mb-2">
+				<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Secondary</div>
+				<div class="grid grid-cols-11 gap-[5px]">
 					<button
 						v-for="s in secondaryShades"
 						:key="'s-' + s.shade"
@@ -37,13 +55,15 @@
 						:class="{ 'swatch-active': modelValue === s.hex }"
 						:style="{ backgroundColor: s.hex }"
 						:title="s.shade + ' — ' + s.hex"
-						@click="$emit('update:modelValue', s.hex)"
+						@click="pick(s.hex)"
 					/>
 				</div>
 			</div>
+
+			<!-- Gray row -->
 			<div>
-				<div class="text-[10px] text-gray-400 mb-0.5">Gray</div>
-				<div class="flex gap-px rounded overflow-hidden">
+				<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Gray</div>
+				<div class="grid grid-cols-11 gap-[5px]">
 					<button
 						v-for="s in grayShades"
 						:key="'g-' + s.shade"
@@ -51,7 +71,7 @@
 						:class="{ 'swatch-active': modelValue === s.hex }"
 						:style="{ backgroundColor: s.hex }"
 						:title="s.shade + ' — ' + s.hex"
-						@click="$emit('update:modelValue', s.hex)"
+						@click="pick(s.hex)"
 					/>
 				</div>
 			</div>
@@ -60,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { ref, computed } from "vue"
 import { generateShades } from "@/utils/color-shades"
 
 const props = defineProps<{
@@ -70,9 +90,16 @@ const props = defineProps<{
 	secondaryColor: string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
 	"update:modelValue": [value: string]
 }>()
+
+const open = ref(false)
+
+function pick(hex: string) {
+	emit("update:modelValue", hex)
+	open.value = false
+}
 
 const primaryShades = computed(() => generateShades(props.primaryColor))
 const secondaryShades = computed(() => generateShades(props.secondaryColor))
@@ -94,23 +121,24 @@ const grayShades = [
 
 <style scoped>
 .swatch {
-	flex: 1;
-	height: 1.5rem;
+	aspect-ratio: 1;
+	width: 100%;
+	border-radius: 3px;
 	cursor: pointer;
 	border: 2px solid transparent;
-	transition: transform 100ms ease, border-color 100ms ease;
 	padding: 0;
-	min-width: 0;
+	transition: transform 80ms ease, border-color 80ms ease;
 }
 .swatch:hover {
-	transform: scaleY(1.4);
+	transform: scale(1.25);
 	z-index: 1;
+	border-color: rgba(255, 255, 255, 0.7);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 .swatch-active {
 	border-color: white;
 	box-shadow: 0 0 0 2px #111;
-	transform: scaleY(1.3);
+	transform: scale(1.2);
 	z-index: 2;
-	border-radius: 2px;
 }
 </style>
