@@ -34,7 +34,8 @@ const routes = [
 	},
 	{
 		path: "/nce",
-		redirect: "/nce/theme-settings",
+		name: "Home",
+		component: () => import("@/pages/HomePage.vue"),
 	},
 ]
 
