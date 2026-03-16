@@ -14,7 +14,7 @@ const routes = [
 	},
 	{
 		path: "/nce/builder",
-		redirect: "/nce/theme-settings",
+		redirect: "/nce/builder/new",
 	},
 	{
 		path: "/nce/builder/:formName",

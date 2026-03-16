@@ -2,7 +2,7 @@
 	<div class="builder-page">
 		<!-- Toolbar -->
 		<header class="toolbar">
-			<a href="/app/nce-builder" class="home-btn" title="Back to NCE Builder">
+			<a href="/nce" class="home-btn" title="Back to NCE Builder">
 				<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M3 10.5L10 3.5L17 10.5"/>
 					<path d="M5 9v7a1 1 0 001 1h3v-4h2v4h3a1 1 0 001-1V9"/>
