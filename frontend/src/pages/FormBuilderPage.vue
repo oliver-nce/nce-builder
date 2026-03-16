@@ -2,12 +2,6 @@
 	<div class="builder-page">
 		<!-- Toolbar -->
 		<header class="toolbar">
-			<a href="/nce" class="home-btn" title="Back to NCE Builder">
-				<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M3 10.5L10 3.5L17 10.5"/>
-					<path d="M5 9v7a1 1 0 001 1h3v-4h2v4h3a1 1 0 001-1V9"/>
-				</svg>
-			</a>
 			<input
 				v-model="state.title"
 				class="title-input"
@@ -135,7 +129,7 @@ onMounted(async () => {
 .builder-page {
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
+	height: 100%;
 	background: #ffffff;
 }
 .toolbar {
@@ -148,19 +142,6 @@ onMounted(async () => {
 	flex-shrink: 0;
 	background: #fff;
 }
-.home-btn {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	border-radius: 6px;
-	color: #6b7280;
-	text-decoration: none;
-	transition: background 150ms, color 150ms;
-	flex-shrink: 0;
-}
-.home-btn:hover { background: #f3f4f6; color: #111827; }
 .title-input {
 	font-size: 16px;
 	font-weight: 600;
