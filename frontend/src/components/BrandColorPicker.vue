@@ -29,144 +29,142 @@
 			</div>
 		</div>
 
-		<!-- Backdrop -->
+		<!-- Backdrop + Picker panel (centered in viewport) -->
 		<Teleport to="body">
 			<div v-if="open" class="fixed inset-0 z-40" @click="open = false" />
-		</Teleport>
-
-		<!-- Picker panel -->
-		<div v-if="open" class="picker-panel">
-			<div class="picker-layout">
-				<!-- Left: Grid + Hex row -->
-				<div class="picker-left">
-					<!-- Color grid -->
-					<div class="color-grid">
-						<!-- Top row: anchor colors -->
-						<div
-							v-for="(hex, i) in topRow"
-							:key="'t-' + i"
-							class="grid-cell"
-							:class="{ selected: selectedHex === hex }"
-							:style="{ backgroundColor: hex }"
-							@click="selectFromGrid(hex)"
-						/>
-						<!-- Spacer -->
-						<div v-for="i in 12" :key="'sp-' + i" class="grid-spacer" />
-						<!-- Gray row -->
-						<template v-for="(hex, i) in grayRow" :key="'g-' + i">
+			<div v-if="open" class="picker-panel">
+				<div class="picker-layout">
+					<!-- Left: Grid + Hex row -->
+					<div class="picker-left">
+						<!-- Color grid -->
+						<div class="color-grid">
+							<!-- Top row: anchor colors -->
 							<div
-								v-if="hex === null"
-								class="grid-cell no-fill"
-							/>
-							<div
-								v-else
+								v-for="(hex, i) in topRow"
+								:key="'t-' + i"
 								class="grid-cell"
 								:class="{ selected: selectedHex === hex }"
 								:style="{ backgroundColor: hex }"
 								@click="selectFromGrid(hex)"
 							/>
-						</template>
-						<!-- Color rows -->
-						<template v-for="(row, ri) in gridRows" :key="'r-' + ri">
-							<div
-								v-for="(hex, ci) in row"
-								:key="'c-' + ri + '-' + ci"
-								class="grid-cell"
-								:class="{ selected: selectedHex === hex }"
-								:style="{ backgroundColor: hex }"
-								@click="selectFromGrid(hex)"
-							/>
-						</template>
-					</div>
-
-					<!-- Hex row -->
-					<div class="hex-row">
-						<input
-							type="text"
-							:value="currentHex"
-							maxlength="7"
-							class="hex-input"
-							@input="onHexInput($event)"
-						/>
-						<button class="hex-btn" title="Copy hex" @click="copyHex">
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-						</button>
-						<span v-if="showCopied" class="copied-text">Copied</span>
-						<button
-							v-if="hasEyeDropper"
-							class="hex-btn"
-							title="Pick from screen"
-							@click="useEyeDropper"
-						>
-							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4"/></svg>
-						</button>
-					</div>
-				</div>
-
-				<!-- Right: Swatch + Sliders + Apply -->
-				<div class="picker-right">
-					<div class="picker-top-row">
-						<div class="swatch-large" :style="{ backgroundColor: currentHex }" />
-					</div>
-
-					<!-- HSV Sliders -->
-					<div class="hsv-sliders">
-						<div class="hsv-row">
-							<label>H</label>
-							<input
-								type="range"
-								class="hue-slider"
-								min="0" max="360"
-								:value="hsv.h"
-								@input="hsv.h = +($event.target as HTMLInputElement).value; selectedHex = ''"
-							/>
-							<input
-								type="number"
-								min="0" max="360"
-								:value="hsv.h"
-								@input="hsv.h = clamp(+($event.target as HTMLInputElement).value, 0, 360); selectedHex = ''"
-							/>
+							<!-- Spacer -->
+							<div v-for="i in 12" :key="'sp-' + i" class="grid-spacer" />
+							<!-- Gray row -->
+							<template v-for="(hex, i) in grayRow" :key="'g-' + i">
+								<div
+									v-if="hex === null"
+									class="grid-cell no-fill"
+								/>
+								<div
+									v-else
+									class="grid-cell"
+									:class="{ selected: selectedHex === hex }"
+									:style="{ backgroundColor: hex }"
+									@click="selectFromGrid(hex)"
+								/>
+							</template>
+							<!-- Color rows -->
+							<template v-for="(row, ri) in gridRows" :key="'r-' + ri">
+								<div
+									v-for="(hex, ci) in row"
+									:key="'c-' + ri + '-' + ci"
+									class="grid-cell"
+									:class="{ selected: selectedHex === hex }"
+									:style="{ backgroundColor: hex }"
+									@click="selectFromGrid(hex)"
+								/>
+							</template>
 						</div>
-						<div class="hsv-row">
-							<label>S</label>
+
+						<!-- Hex row -->
+						<div class="hex-row">
 							<input
-								type="range"
-								class="sat-slider"
-								min="0" max="100"
-								:value="hsv.s"
-								:style="{ background: satGradient }"
-								@input="hsv.s = +($event.target as HTMLInputElement).value; selectedHex = ''"
+								type="text"
+								:value="currentHex"
+								maxlength="7"
+								class="hex-input"
+								@input="onHexInput($event)"
 							/>
-							<input
-								type="number"
-								min="0" max="100"
-								:value="hsv.s"
-								@input="hsv.s = clamp(+($event.target as HTMLInputElement).value, 0, 100); selectedHex = ''"
-							/>
-						</div>
-						<div class="hsv-row">
-							<label>V</label>
-							<input
-								type="range"
-								class="val-slider"
-								min="0" max="100"
-								:value="hsv.v"
-								:style="{ background: valGradient }"
-								@input="hsv.v = +($event.target as HTMLInputElement).value; selectedHex = ''"
-							/>
-							<input
-								type="number"
-								min="0" max="100"
-								:value="hsv.v"
-								@input="hsv.v = clamp(+($event.target as HTMLInputElement).value, 0, 100); selectedHex = ''"
-							/>
+							<button class="hex-btn" title="Copy hex" @click="copyHex">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+							</button>
+							<span v-if="showCopied" class="copied-text">Copied</span>
+							<button
+								v-if="hasEyeDropper"
+								class="hex-btn"
+								title="Pick from screen"
+								@click="useEyeDropper"
+							>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4"/></svg>
+							</button>
 						</div>
 					</div>
 
-					<button class="apply-btn" @click="apply">Apply</button>
+					<!-- Right: Swatch + Sliders + Apply -->
+					<div class="picker-right">
+						<div class="picker-top-row">
+							<div class="swatch-large" :style="{ backgroundColor: currentHex }" />
+						</div>
+
+						<!-- HSV Sliders -->
+						<div class="hsv-sliders">
+							<div class="hsv-row">
+								<label>H</label>
+								<input
+									type="range"
+									class="hue-slider"
+									min="0" max="360"
+									:value="hsv.h"
+									@input="hsv.h = +($event.target as HTMLInputElement).value; selectedHex = ''"
+								/>
+								<input
+									type="number"
+									min="0" max="360"
+									:value="hsv.h"
+									@input="hsv.h = clamp(+($event.target as HTMLInputElement).value, 0, 360); selectedHex = ''"
+								/>
+							</div>
+							<div class="hsv-row">
+								<label>S</label>
+								<input
+									type="range"
+									class="sat-slider"
+									min="0" max="100"
+									:value="hsv.s"
+									:style="{ background: satGradient }"
+									@input="hsv.s = +($event.target as HTMLInputElement).value; selectedHex = ''"
+								/>
+								<input
+									type="number"
+									min="0" max="100"
+									:value="hsv.s"
+									@input="hsv.s = clamp(+($event.target as HTMLInputElement).value, 0, 100); selectedHex = ''"
+								/>
+							</div>
+							<div class="hsv-row">
+								<label>V</label>
+								<input
+									type="range"
+									class="val-slider"
+									min="0" max="100"
+									:value="hsv.v"
+									:style="{ background: valGradient }"
+									@input="hsv.v = +($event.target as HTMLInputElement).value; selectedHex = ''"
+								/>
+								<input
+									type="number"
+									min="0" max="100"
+									:value="hsv.v"
+									@input="hsv.v = clamp(+($event.target as HTMLInputElement).value, 0, 100); selectedHex = ''"
+								/>
+							</div>
+						</div>
+
+						<button class="apply-btn" @click="apply">Apply</button>
+					</div>
 				</div>
 			</div>
-		</div>
+		</Teleport>
 	</div>
 </template>
 
@@ -329,10 +327,11 @@ function apply() {
 
 <style scoped>
 .picker-panel {
-	position: absolute;
+	position: fixed;
 	z-index: 50;
-	margin-top: 4px;
-	left: 0;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
 	background: white;
 	border: 1px solid rgba(0,0,0,0.12);
 	border-radius: 12px;

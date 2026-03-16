@@ -16,66 +16,62 @@
 			<span class="ml-auto text-gray-400 text-[10px]">&#9660;</span>
 		</button>
 
-		<!-- Popover -->
+		<!-- Popover (centered in viewport) -->
 		<Teleport to="body">
+			<div v-if="open" class="fixed inset-0 z-40" @click="open = false" />
 			<div
 				v-if="open"
-				class="fixed inset-0 z-40"
-				@click="open = false"
-			/>
+				class="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white border border-gray-200 rounded-lg shadow-xl p-3 w-72"
+			>
+				<!-- Primary row -->
+				<div class="mb-2">
+					<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Primary</div>
+					<div class="grid grid-cols-11 gap-[5px]">
+						<button
+							v-for="s in primaryShades"
+							:key="'p-' + s.shade"
+							class="swatch"
+							:class="{ 'swatch-active': modelValue === s.hex }"
+							:style="{ backgroundColor: s.hex }"
+							:title="s.shade + ' — ' + s.hex"
+							@click="pick(s.hex)"
+						/>
+					</div>
+				</div>
+
+				<!-- Secondary row -->
+				<div class="mb-2">
+					<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Secondary</div>
+					<div class="grid grid-cols-11 gap-[5px]">
+						<button
+							v-for="s in secondaryShades"
+							:key="'s-' + s.shade"
+							class="swatch"
+							:class="{ 'swatch-active': modelValue === s.hex }"
+							:style="{ backgroundColor: s.hex }"
+							:title="s.shade + ' — ' + s.hex"
+							@click="pick(s.hex)"
+						/>
+					</div>
+				</div>
+
+				<!-- Gray row -->
+				<div>
+					<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Gray</div>
+					<div class="grid grid-cols-11 gap-[5px]">
+						<button
+							v-for="s in grayShades"
+							:key="'g-' + s.shade"
+							class="swatch"
+							:class="{ 'swatch-active': modelValue === s.hex }"
+							:style="{ backgroundColor: s.hex }"
+							:title="s.shade + ' — ' + s.hex"
+							@click="pick(s.hex)"
+						/>
+					</div>
+				</div>
+			</div>
 		</Teleport>
-		<div
-			v-if="open"
-			class="absolute z-50 mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-lg p-3 w-72"
-		>
-			<!-- Primary row -->
-			<div class="mb-2">
-				<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Primary</div>
-				<div class="grid grid-cols-11 gap-[5px]">
-					<button
-						v-for="s in primaryShades"
-						:key="'p-' + s.shade"
-						class="swatch"
-						:class="{ 'swatch-active': modelValue === s.hex }"
-						:style="{ backgroundColor: s.hex }"
-						:title="s.shade + ' — ' + s.hex"
-						@click="pick(s.hex)"
-					/>
-				</div>
-			</div>
-
-			<!-- Secondary row -->
-			<div class="mb-2">
-				<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Secondary</div>
-				<div class="grid grid-cols-11 gap-[5px]">
-					<button
-						v-for="s in secondaryShades"
-						:key="'s-' + s.shade"
-						class="swatch"
-						:class="{ 'swatch-active': modelValue === s.hex }"
-						:style="{ backgroundColor: s.hex }"
-						:title="s.shade + ' — ' + s.hex"
-						@click="pick(s.hex)"
-					/>
-				</div>
-			</div>
-
-			<!-- Gray row -->
-			<div>
-				<div class="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Gray</div>
-				<div class="grid grid-cols-11 gap-[5px]">
-					<button
-						v-for="s in grayShades"
-						:key="'g-' + s.shade"
-						class="swatch"
-						:class="{ 'swatch-active': modelValue === s.hex }"
-						:style="{ backgroundColor: s.hex }"
-						:title="s.shade + ' — ' + s.hex"
-						@click="pick(s.hex)"
-					/>
-				</div>
-			</div>
-		</div>
 	</div>
 </template>
 
