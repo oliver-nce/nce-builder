@@ -206,6 +206,13 @@
 							v-model="form.shadow"
 						/>
 					</div>
+					<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+						<ColorField
+							label="Shadow Color"
+							:model-value="form.shadow_color"
+							@update:model-value="form.shadow_color = $event"
+						/>
+					</div>
 
 					<!-- Radius preview -->
 					<div class="mt-4 flex gap-4">
@@ -343,12 +350,29 @@ const BORDER_RADIUS_CSS: Record<string, string> = {
 	none: "0", sm: "0.125rem", md: "0.375rem", lg: "0.5rem", full: "9999px",
 }
 
-const SHADOW_CSS: Record<string, string> = {
-	none: "none",
-	sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-	md: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-	lg: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
-	xl: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+const SHADOW_DEFS: Record<string, Array<[number,number,number,number,number]>> = {
+	none: [],
+	sm: [[0,1,2,0,0.05]],
+	md: [[0,4,6,-1,0.1],[0,2,4,-2,0.1]],
+	lg: [[0,10,15,-3,0.1],[0,4,6,-4,0.1]],
+	xl: [[0,20,25,-5,0.1],[0,8,10,-6,0.1]],
+	"2xl": [[0,25,50,-12,0.25]],
+	"3xl": [[0,35,60,-15,0.3]],
+}
+
+function hexToRgb(hex: string): string {
+	if (!hex || hex.length < 7) return "0,0,0"
+	const r = parseInt(hex.slice(1,3), 16)
+	const g = parseInt(hex.slice(3,5), 16)
+	const b = parseInt(hex.slice(5,7), 16)
+	return `${r},${g},${b}`
+}
+
+function buildShadow(level: string, color: string): string {
+	const defs = SHADOW_DEFS[level] || SHADOW_DEFS.md
+	if (!defs.length) return "none"
+	const rgb = hexToRgb(color)
+	return defs.map(([x,y,b,s,a]) => `${x}px ${y}px ${b}px ${s}px rgba(${rgb},${a})`).join(", ")
 }
 
 const TRANSITION_CSS: Record<string, string> = { fast: "150ms", normal: "200ms", slow: "300ms" }
@@ -375,7 +399,8 @@ function computeCSSVariables(): Record<string, string> {
 		const m: Record<string, string> = { tight: "0.75rem", normal: "1rem", relaxed: "1.5rem" }
 		vars["--nce-spacing-base"] = m[form.spacing_scale] || "1rem"
 	}
-	if (form.shadow) vars["--nce-shadow"] = SHADOW_CSS[form.shadow] || SHADOW_CSS.md
+	if (form.shadow_color) vars["--nce-shadow-color"] = form.shadow_color
+	if (form.shadow) vars["--nce-shadow"] = buildShadow(form.shadow, form.shadow_color || "#000000")
 	if (form.transition_speed) vars["--nce-transition-speed"] = TRANSITION_CSS[form.transition_speed] || "200ms"
 	if (form.sidebar_width) vars["--nce-sidebar-width"] = form.sidebar_width
 	if (form.container_max_width) {
@@ -429,6 +454,7 @@ const ALL_FIELDS = [
 	"border_radius",
 	"spacing_scale",
 	"shadow",
+	"shadow_color",
 	"sidebar_width",
 	"container_max_width",
 	"transition_speed",
@@ -464,6 +490,7 @@ const DEFAULTS: Record<FormKey, any> = {
 	border_radius: "md",
 	spacing_scale: "normal",
 	shadow: "md",
+	shadow_color: "#000000",
 	sidebar_width: "240px",
 	container_max_width: "1280px",
 	transition_speed: "normal",
@@ -520,7 +547,7 @@ const lineHeightOptions = ["tight", "snug", "normal", "relaxed", "loose"]
 const weightOptions = ["300", "400", "500", "600"]
 const radiusOptions = ["none", "sm", "md", "lg", "full"]
 const spacingOptions = ["tight", "normal", "relaxed"]
-const shadowOptions = ["none", "sm", "md", "lg", "xl"]
+const shadowOptions = ["none", "sm", "md", "lg", "xl", "2xl", "3xl"]
 const sidebarOptions = ["200px", "220px", "240px", "260px", "280px"]
 const containerOptions = ["960px", "1024px", "1152px", "1280px", "1440px", "full"]
 const transitionOptions = ["fast", "normal", "slow"]

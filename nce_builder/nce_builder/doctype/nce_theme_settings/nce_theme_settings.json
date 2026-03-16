@@ -43,6 +43,7 @@
   "border_radius",
   "spacing_scale",
   "shadow",
+  "shadow_color",
   "column_break_layout",
   "sidebar_width",
   "container_max_width",
@@ -282,7 +283,14 @@
    "fieldtype": "Select",
    "label": "Shadow Depth",
    "default": "md",
-   "options": "none\nsm\nmd\nlg\nxl"
+   "options": "none\nsm\nmd\nlg\nxl\n2xl\n3xl"
+  },
+  {
+   "fieldname": "shadow_color",
+   "fieldtype": "Color",
+   "label": "Shadow Color",
+   "default": "#000000",
+   "description": "Base colour for drop shadows"
   },
   {
    "fieldname": "column_break_layout",

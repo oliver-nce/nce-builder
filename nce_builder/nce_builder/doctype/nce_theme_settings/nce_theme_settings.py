@@ -27,13 +27,31 @@ LINE_HEIGHT_MAP = {
 	"loose": "2",
 }
 
-SHADOW_MAP = {
-	"none": "none",
-	"sm": "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-	"md": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-	"lg": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
-	"xl": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+SHADOW_DEFS = {
+	"none": [],
+	"sm": [(0, 1, 2, 0, 0.05)],
+	"md": [(0, 4, 6, -1, 0.1), (0, 2, 4, -2, 0.1)],
+	"lg": [(0, 10, 15, -3, 0.1), (0, 4, 6, -4, 0.1)],
+	"xl": [(0, 20, 25, -5, 0.1), (0, 8, 10, -6, 0.1)],
+	"2xl": [(0, 25, 50, -12, 0.25)],
+	"3xl": [(0, 35, 60, -15, 0.3)],
 }
+
+
+def _hex_to_rgb(hex_color):
+	hex_color = hex_color.lstrip("#")
+	return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
+def _build_shadow(level, color_hex):
+	defs = SHADOW_DEFS.get(level, SHADOW_DEFS["md"])
+	if not defs:
+		return "none"
+	r, g, b = _hex_to_rgb(color_hex) if color_hex else (0, 0, 0)
+	parts = []
+	for x, y, blur, spread, opacity in defs:
+		parts.append(f"{x}px {y}px {blur}px {spread}px rgba({r}, {g}, {b}, {opacity})")
+	return ", ".join(parts)
 
 TRANSITION_MAP = {
 	"fast": "150ms",
@@ -106,7 +124,9 @@ class NCEThemeSettings(Document):
 		spacing = SPACING_SCALE_MAP.get(self.spacing_scale or "normal", "1rem")
 		lines.append(f"\t--nce-spacing-base: {spacing};")
 
-		shadow = SHADOW_MAP.get(self.shadow or "md", SHADOW_MAP["md"])
+		shadow_color = self.shadow_color or "#000000"
+		lines.append(f"\t--nce-shadow-color: {shadow_color};")
+		shadow = _build_shadow(self.shadow or "md", shadow_color)
 		lines.append(f"\t--nce-shadow: {shadow};")
 
 		transition = TRANSITION_MAP.get(self.transition_speed or "normal", "200ms")
