@@ -17,6 +17,7 @@
 				@select="emit('select', el.id)"
 				@move="(x: number, y: number) => emit('move', el.id, x, y)"
 				@resize="(w: number, h: number) => emit('resize', el.id, w, h)"
+				@contextmenu="(ev: MouseEvent) => emit('element-contextmenu', el.id, ev)"
 			/>
 		</div>
 	</div>
@@ -33,6 +34,7 @@ const emit = defineEmits<{
 	move: [id: string, x: number, y: number]
 	resize: [id: string, w: number, h: number]
 	"drop-new": [type: string, x: number, y: number]
+	"element-contextmenu": [id: string, event: MouseEvent]
 }>()
 
 const canvasRef = ref<HTMLDivElement | null>(null)

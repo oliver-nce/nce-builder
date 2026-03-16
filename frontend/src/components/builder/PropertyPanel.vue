@@ -50,10 +50,23 @@
 
 			<div class="field-group">
 				<label>Data Binding</label>
-				<div class="binding-value">
-					{{ element.config.fieldPath || 'Not connected' }}
+				<div v-if="element.config.fieldPath" class="binding-value">
+					{{ element.config.fieldPath }}
 				</div>
-				<div class="binding-help">Right-click element to bind data</div>
+				<div v-else class="binding-value not-connected">
+					Not connected
+				</div>
+				<div v-if="element.config.fieldPath" class="binding-meta">
+					<div>Terminal: {{ element.config.terminalDoctype }}</div>
+					<div>Type: {{ element.config.fieldType }}</div>
+				</div>
+				<div v-else class="binding-help">
+					<span class="binding-help-link" @click="emit('open-pathfinder', element.id)">Right-click element to bind data</span>
+				</div>
+				<div v-if="element.config.fieldPath" class="binding-actions">
+					<button class="clear-btn" @click="emit('update', element.id, { fieldPath: '', fieldType: '', terminalDoctype: '' })">Clear Binding</button>
+					<button class="change-btn" @click="emit('open-pathfinder', element.id)">Change binding...</button>
+				</div>
 			</div>
 
 			<button class="delete-btn" @click="onDelete">Delete Element</button>
@@ -74,6 +87,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	update: [id: string, changes: Partial<ElementConfig>]
 	delete: [id: string]
+	"open-pathfinder": [id: string]
 }>()
 
 function onDelete() {
@@ -120,10 +134,49 @@ function onDelete() {
 	padding: 4px 8px;
 	border-radius: 4px;
 }
+.binding-value:not(.not-connected) {
+	background: #eff6ff;
+}
+.binding-meta {
+	font-size: 11px;
+	color: #6b7280;
+	margin-top: 4px;
+}
+.binding-meta div {
+	line-height: 1.5;
+}
 .binding-help {
 	font-size: 11px;
 	color: #9ca3af;
 	margin-top: 4px;
+}
+.binding-help-link {
+	cursor: pointer;
+	color: #2563eb;
+	text-decoration: underline;
+}
+.binding-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 6px;
+}
+.clear-btn {
+	font-size: 11px;
+	color: #dc2626;
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	text-decoration: underline;
+}
+.change-btn {
+	font-size: 11px;
+	color: #2563eb;
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	text-decoration: underline;
 }
 .delete-btn {
 	width: 100%;

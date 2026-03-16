@@ -20,6 +20,7 @@ export default defineConfig({
 		alias: {
 			"@": path.resolve(__dirname, "src"),
 			"tailwind.config.js": path.resolve(__dirname, "tailwind.config.js"),
+			"@pathfinder": path.resolve(__dirname, "../nce_builder/public/js/path_finder"),
 		},
 	},
 	build: {

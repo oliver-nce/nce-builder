@@ -2,7 +2,7 @@
 	<div
 		ref="rootRef"
 		class="builder-element"
-		:class="{ 'is-selected': selected }"
+		:class="{ 'is-selected': selected, 'is-bound': element.config.fieldPath }"
 		:style="{
 			gridColumn: `${element.x + 1} / span ${element.w}`,
 			gridRow: `${element.y + 1} / span ${element.h}`,
@@ -22,6 +22,10 @@
 				<div class="field-label">{{ element.config.label }}</div>
 				<div class="field-mock-input">
 					<span class="field-placeholder">{{ element.config.placeholder || '' }}</span>
+				</div>
+				<div v-if="element.config.fieldPath" class="binding-chip">
+					<span class="binding-dot"></span>
+					{{ element.config.fieldPath }}
 				</div>
 				<span v-if="!element.config.editable" class="readonly-tag">read-only</span>
 			</div>
@@ -51,12 +55,10 @@ const emit = defineEmits<{
 
 const rootRef = ref<HTMLElement | null>(null)
 
-// One grid step = cellSize + gap pixels
 function step(): number {
 	return props.gridConfig.cellSize + props.gridConfig.gap
 }
 
-// ── Move: mousedown on body (not on resize handles) ──
 function onMouseDown(e: MouseEvent) {
 	if ((e.target as HTMLElement).classList.contains("handle")) return
 	e.preventDefault()
@@ -85,7 +87,6 @@ function onMouseDown(e: MouseEvent) {
 	document.addEventListener("mouseup", onUp)
 }
 
-// ── Resize: bottom-right handle ──
 function onResizeDown(e: MouseEvent) {
 	e.preventDefault()
 	e.stopPropagation()
@@ -133,6 +134,9 @@ function onResizeDown(e: MouseEvent) {
 	border-color: #3b82f6;
 	box-shadow: var(--nce-shadow, 0 1px 3px rgba(0,0,0,0.1)), 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
+.is-bound {
+	border-left: 3px solid #059669;
+}
 
 .el-content {
 	padding: 6px 8px;
@@ -169,6 +173,30 @@ function onResizeDown(e: MouseEvent) {
 	color: #9ca3af;
 	font-size: 12px;
 }
+
+.binding-chip {
+	font-size: 9px;
+	color: #059669;
+	background: #ecfdf5;
+	border-radius: 3px;
+	padding: 1px 6px;
+	margin-top: 2px;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.binding-dot {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: #059669;
+	flex-shrink: 0;
+}
+
 .readonly-tag {
 	font-size: 9px;
 	color: #9ca3af;
@@ -177,7 +205,6 @@ function onResizeDown(e: MouseEvent) {
 	margin-top: 2px;
 }
 
-/* Resize handles */
 .handle {
 	position: absolute;
 	width: 8px;

@@ -40,6 +40,7 @@
 				@move="moveElement"
 				@resize="resizeElement"
 				@drop-new="(type: string, x: number, y: number) => addElement(type as 'field' | 'caption', x, y)"
+				@element-contextmenu="onElementContextMenu"
 			/>
 
 			<aside class="panel-right">
@@ -49,9 +50,19 @@
 					:secondary-color="secondaryColor"
 					@update="(id: string, changes: any) => updateElement(id, changes)"
 					@delete="removeElement"
+					@open-pathfinder="openPathFinder"
 				/>
 			</aside>
 		</div>
+
+		<PathFinder
+			v-if="showPathFinder && state.targetDoctype"
+			:root-doctype="state.targetDoctype"
+			mode="float"
+			:visible-tabs="['field']"
+			@select="onPathFinderSelect"
+			@close="onPathFinderClose"
+		/>
 	</div>
 </template>
 
@@ -62,6 +73,7 @@ import { useBuilderState } from "@/composables/useBuilderState"
 import ElementPalette from "@/components/builder/ElementPalette.vue"
 import BuilderCanvas from "@/components/builder/BuilderCanvas.vue"
 import PropertyPanel from "@/components/builder/PropertyPanel.vue"
+import PathFinder from "@pathfinder/components/PathFinder.vue"
 
 const route = useRoute()
 const router = useRouter()
@@ -84,6 +96,8 @@ const saving = ref(false)
 const primaryColor = ref("#0242A8")
 const secondaryColor = ref("#F5D06C")
 const doctypeOptions = ref<string[]>([])
+const showPathFinder = ref(false)
+const pathFinderTargetId = ref<string | null>(null)
 
 async function fetchDoctypeOptions() {
 	try {
@@ -97,6 +111,44 @@ async function fetchDoctypeOptions() {
 	} catch {
 		// WP Tables may not exist yet — leave empty
 	}
+}
+
+function onElementContextMenu(id: string, event: MouseEvent) {
+	if (!state.targetDoctype) {
+		alert('Select a root DocType first')
+		return
+	}
+	pathFinderTargetId.value = id
+	selectElement(id)
+	showPathFinder.value = true
+}
+
+function openPathFinder(id: string) {
+	if (!state.targetDoctype) {
+		alert('Select a root DocType first')
+		return
+	}
+	pathFinderTargetId.value = id
+	selectElement(id)
+	showPathFinder.value = true
+}
+
+function onPathFinderSelect(payload: { mode: string, data: any }) {
+	if (payload.mode === 'field' && pathFinderTargetId.value) {
+		updateElement(pathFinderTargetId.value, {
+			fieldPath: payload.data.resolve_key,
+			fieldType: payload.data.terminal_fieldtype,
+			terminalDoctype: payload.data.terminal_doctype,
+			label: payload.data.formkit_schema?.label || payload.data.terminal_field
+		})
+	}
+	showPathFinder.value = false
+	pathFinderTargetId.value = null
+}
+
+function onPathFinderClose() {
+	showPathFinder.value = false
+	pathFinderTargetId.value = null
 }
 
 async function onSave() {
