@@ -83,13 +83,14 @@
 				<section>
 					<h2 class="section-title">Status Colours</h2>
 					<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-						<ColorField
+						<SwatchPicker
 							v-for="c in statusColors"
 							:key="c.key"
 							:label="c.label"
 							:model-value="form[c.key]"
 							@update:model-value="form[c.key] = $event"
-							show-shades
+							:primary-color="form.primary_color"
+							:secondary-color="form.secondary_color"
 						/>
 					</div>
 				</section>
@@ -98,12 +99,14 @@
 				<section>
 					<h2 class="section-title">Text Colours</h2>
 					<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-						<ColorField
+						<SwatchPicker
 							v-for="c in textColors"
 							:key="c.key"
 							:label="c.label"
 							:model-value="form[c.key]"
 							@update:model-value="form[c.key] = $event"
+							:primary-color="form.primary_color"
+							:secondary-color="form.secondary_color"
 						/>
 					</div>
 				</section>
@@ -112,12 +115,14 @@
 				<section>
 					<h2 class="section-title">Surfaces</h2>
 					<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-						<ColorField
+						<SwatchPicker
 							v-for="c in surfaceColors"
 							:key="c.key"
 							:label="c.label"
 							:model-value="form[c.key]"
 							@update:model-value="form[c.key] = $event"
+							:primary-color="form.primary_color"
+							:secondary-color="form.secondary_color"
 						/>
 					</div>
 				</section>
@@ -188,13 +193,22 @@
 			<!-- ==================== LAYOUT TAB ==================== -->
 			<div v-show="activeTab === 'layout'" class="space-y-8">
 				<section>
-					<h2 class="section-title">Corners &amp; Spacing</h2>
+					<h2 class="section-title">Corners</h2>
+					<div class="flex gap-3 mb-6">
+						<div
+							v-for="r in ['none','sm','md','lg','full']"
+							:key="r"
+							class="w-16 h-16 border-2 cursor-pointer transition-all"
+							:class="form.border_radius === r ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:border-gray-300'"
+							:style="{ borderRadius: radiusMap[r] }"
+							@click="form.border_radius = r"
+						>
+							<span class="flex items-center justify-center h-full text-xs text-gray-500 font-medium">{{ r }}</span>
+						</div>
+					</div>
+
+					<h2 class="section-title">Spacing &amp; Shadows</h2>
 					<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-						<SelectField
-							label="Border Radius"
-							:options="radiusOptions"
-							v-model="form.border_radius"
-						/>
 						<SelectField
 							label="Spacing Scale"
 							:options="spacingOptions"
@@ -205,27 +219,13 @@
 							:options="shadowOptions"
 							v-model="form.shadow"
 						/>
-					</div>
-					<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-						<ColorField
+						<SwatchPicker
 							label="Shadow Color"
 							:model-value="form.shadow_color"
 							@update:model-value="form.shadow_color = $event"
+							:primary-color="form.primary_color"
+							:secondary-color="form.secondary_color"
 						/>
-					</div>
-
-					<!-- Radius preview -->
-					<div class="mt-4 flex gap-4">
-						<div
-							v-for="r in ['none','sm','md','lg','full']"
-							:key="r"
-							class="w-16 h-16 border-2 transition-all"
-							:class="form.border_radius === r ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50'"
-							:style="{ borderRadius: radiusMap[r] }"
-							@click="form.border_radius = r"
-						>
-							<span class="flex items-center justify-center h-full text-xs text-gray-500">{{ r }}</span>
-						</div>
 					</div>
 				</section>
 
@@ -311,6 +311,7 @@ import { createResource } from "frappe-ui"
 import { generateShades, isDark, type ColorShade } from "@/utils/color-shades"
 import ColorField from "@/components/ColorField.vue"
 import SelectField from "@/components/SelectField.vue"
+import SwatchPicker from "@/components/SwatchPicker.vue"
 
 // ─── Preview window ───────────────────────────────────────────────
 
