@@ -9,17 +9,6 @@
 			/>
 			<div class="toolbar-spacer" />
 
-			<label class="toolbar-label">Cell:</label>
-			<input
-				type="number"
-				v-model.number="state.gridConfig.cellSize"
-				class="toolbar-input-sm"
-				min="16"
-				max="80"
-				step="2"
-			/>
-			<span class="toolbar-label">px</span>
-
 			<label class="toolbar-label">DocType:</label>
 			<select
 				v-model="state.targetDoctype"
@@ -56,11 +45,9 @@
 			<aside class="panel-right">
 				<PropertyPanel
 					:element="selectedElement"
-					:grid-config="state.gridConfig"
 					:primary-color="primaryColor"
 					:secondary-color="secondaryColor"
 					@update="(id: string, changes: any) => updateElement(id, changes)"
-					@update-grid="(changes: any) => Object.assign(state.gridConfig, changes)"
 					@delete="removeElement"
 				/>
 			</aside>
@@ -177,14 +164,6 @@ onMounted(async () => {
 	cursor: pointer;
 }
 .toolbar-select:disabled { color: #9ca3af; cursor: wait; }
-.toolbar-input-sm {
-	font-size: 13px;
-	border: 1px solid #d1d5db;
-	border-radius: 4px;
-	padding: 4px 6px;
-	width: 56px;
-	text-align: center;
-}
 .save-btn {
 	padding: 6px 20px;
 	background: #111827;

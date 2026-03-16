@@ -40,7 +40,7 @@ export function useBuilderState(formName: string) {
     title: '',
     targetDoctype: '',
     gridConfig: {
-      cellSize: 30,
+      cellSize: 10,
       gap: 1
     },
     elements: [],
@@ -79,8 +79,8 @@ export function useBuilderState(formName: string) {
       type,
       x,
       y,
-      w: sel?.w ?? 3,
-      h: sel?.h ?? 1,
+      w: sel?.w ?? 25,
+      h: sel?.h ?? 3,
       config: baseConfig,
     }
     state.elements.push(element)

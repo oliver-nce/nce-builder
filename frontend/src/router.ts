@@ -30,7 +30,10 @@ const routes = [
 	},
 	{
 		path: "/nce",
-		redirect: "/nce/theme-settings",
+		beforeEnter() {
+			window.location.href = "/app/nce-builder"
+		},
+		component: () => import("@/pages/ThemeSettingsPage.vue"),
 	},
 ]
 
