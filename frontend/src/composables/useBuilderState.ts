@@ -53,22 +53,35 @@ export function useBuilderState(formName: string) {
 
   function addElement(type: 'field' | 'caption', x: number, y: number): void {
     const id = `el_${Date.now()}`
+    const sel = selectedElement.value
+
+    // Inherit visual config from selected element (not data binding)
+    const baseConfig: ElementConfig = sel
+      ? {
+          ...sel.config,
+          label: type === 'field' ? 'New Field' : 'Caption',
+          fieldPath: '',
+          fieldType: '',
+          terminalDoctype: '',
+        }
+      : {
+          label: type === 'field' ? 'New Field' : 'Caption',
+          placeholder: '',
+          fieldPath: '',
+          fieldType: '',
+          terminalDoctype: '',
+          editable: true,
+          frameColor: '',
+        }
+
     const element: BuilderElement = {
       id,
       type,
       x,
       y,
-      w: 3,
-      h: 1,
-      config: {
-        label: type === 'field' ? 'New Field' : 'Caption',
-        placeholder: '',
-        fieldPath: '',
-        fieldType: '',
-        terminalDoctype: '',
-        editable: true,
-        frameColor: ''
-      }
+      w: sel?.w ?? 3,
+      h: sel?.h ?? 1,
+      config: baseConfig,
     }
     state.elements.push(element)
     state.selectedId = id

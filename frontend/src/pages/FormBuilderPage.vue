@@ -49,9 +49,11 @@
 			<aside class="panel-right">
 				<PropertyPanel
 					:element="selectedElement"
+					:grid-config="state.gridConfig"
 					:primary-color="primaryColor"
 					:secondary-color="secondaryColor"
 					@update="(id: string, changes: any) => updateElement(id, changes)"
+					@update-grid="(changes: any) => Object.assign(state.gridConfig, changes)"
 					@delete="removeElement"
 				/>
 			</aside>

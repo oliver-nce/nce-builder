@@ -27,13 +27,8 @@
 			</div>
 		</div>
 
-		<!-- Resize handles (visible when selected) -->
-		<template v-if="selected">
-			<div class="handle handle-br" @mousedown.stop="onResizeDown" />
-			<div class="handle handle-tl" />
-			<div class="handle handle-tr" />
-			<div class="handle handle-bl" />
-		</template>
+		<!-- Resize handle (bottom-right only) -->
+		<div v-if="selected" class="handle handle-br" @mousedown.stop="onResizeDown" />
 	</div>
 </template>
 
@@ -193,7 +188,4 @@ function onResizeDown(e: MouseEvent) {
 	z-index: 3;
 }
 .handle-br { right: -5px; bottom: -5px; cursor: nwse-resize; }
-.handle-tl { left: -5px; top: -5px; cursor: nwse-resize; }
-.handle-tr { right: -5px; top: -5px; cursor: nesw-resize; }
-.handle-bl { left: -5px; bottom: -5px; cursor: nesw-resize; }
 </style>

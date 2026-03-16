@@ -1,7 +1,41 @@
 <template>
 	<div>
-		<div v-if="!element" class="empty-state">
-			Select an element to edit its properties
+		<div v-if="!element">
+			<div class="panel-heading">Form Settings</div>
+
+			<div class="field-group">
+				<label>Grid Square Size</label>
+				<div class="range-row">
+					<input
+						type="range"
+						:value="gridConfig.cellSize"
+						min="16"
+						max="80"
+						step="2"
+						@input="emit('update-grid', { cellSize: +($event.target as HTMLInputElement).value })"
+					/>
+					<span class="range-value">{{ gridConfig.cellSize }}px</span>
+				</div>
+			</div>
+
+			<div class="field-group">
+				<label>Grid Gap</label>
+				<div class="range-row">
+					<input
+						type="range"
+						:value="gridConfig.gap"
+						min="0"
+						max="8"
+						step="1"
+						@input="emit('update-grid', { gap: +($event.target as HTMLInputElement).value })"
+					/>
+					<span class="range-value">{{ gridConfig.gap }}px</span>
+				</div>
+			</div>
+
+			<div class="hint-text">
+				Drag elements from the palette onto the grid. Click an element to edit it.
+			</div>
 		</div>
 		<template v-else>
 			<div class="panel-heading">Properties</div>
@@ -59,17 +93,19 @@
 </template>
 
 <script setup lang="ts">
-import type { BuilderElement, ElementConfig } from "@/composables/useBuilderState"
+import type { BuilderElement, ElementConfig, GridConfig } from "@/composables/useBuilderState"
 import SwatchPicker from "@/components/SwatchPicker.vue"
 
 const props = defineProps<{
 	element: BuilderElement | null
+	gridConfig: GridConfig
 	primaryColor: string
 	secondaryColor: string
 }>()
 
 const emit = defineEmits<{
 	update: [id: string, changes: Partial<ElementConfig>]
+	"update-grid": [changes: Partial<GridConfig>]
 	delete: [id: string]
 }>()
 
@@ -137,10 +173,25 @@ function onDelete() {
 .delete-btn:hover {
 	background: #fecaca;
 }
-.empty-state {
+.range-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.range-row input[type="range"] {
+	flex: 1;
+}
+.range-value {
+	font-size: 12px;
+	font-family: monospace;
+	color: #6b7280;
+	min-width: 36px;
+	text-align: right;
+}
+.hint-text {
 	color: #9ca3af;
-	font-size: 13px;
-	text-align: center;
-	padding-top: 40px;
+	font-size: 12px;
+	margin-top: 24px;
+	line-height: 1.5;
 }
 </style>
