@@ -64,7 +64,7 @@
 					<span class="binding-help-link" @click="emit('open-pathfinder', element.id)">Right-click element to bind data</span>
 				</div>
 				<div v-if="element.config.fieldPath" class="binding-actions">
-					<button class="clear-btn" @click="emit('update', element.id, { fieldPath: '', fieldType: '', terminalDoctype: '' })">Clear Binding</button>
+					<button class="clear-btn" @click="emit('update', element.id, { fieldPath: '', fieldType: '', terminalDoctype: '', fieldPathArray: [] })">Clear Binding</button>
 					<button class="change-btn" @click="emit('open-pathfinder', element.id)">Change binding...</button>
 				</div>
 			</div>

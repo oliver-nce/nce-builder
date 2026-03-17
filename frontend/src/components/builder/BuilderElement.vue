@@ -20,8 +20,9 @@
 			<!-- Editable field -->
 			<div v-else>
 				<div class="field-label">{{ element.config.label }}</div>
-				<div class="field-mock-input">
-					<span class="field-placeholder">{{ element.config.placeholder || '' }}</span>
+				<div class="field-mock-input" :class="{ 'has-preview': previewValue != null }">
+					<span v-if="previewValue != null" class="field-preview-value">{{ previewValue }}</span>
+					<span v-else class="field-placeholder">{{ element.config.placeholder || '' }}</span>
 				</div>
 				<div v-if="element.config.fieldPath" class="binding-chip">
 					<span class="binding-dot"></span>
@@ -44,6 +45,7 @@ const props = defineProps<{
 	element: BuilderElement
 	selected: boolean
 	gridConfig: GridConfig
+	previewValue?: any
 }>()
 
 const emit = defineEmits<{
@@ -172,6 +174,15 @@ function onResizeDown(e: MouseEvent) {
 .field-placeholder {
 	color: #9ca3af;
 	font-size: 12px;
+}
+.field-mock-input.has-preview {
+	background: #fefce8;
+	border: 1px solid #fde68a;
+}
+.field-preview-value {
+	color: #92400e;
+	font-size: 12px;
+	font-weight: 500;
 }
 
 .binding-chip {

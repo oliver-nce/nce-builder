@@ -23,6 +23,15 @@
 				</option>
 			</select>
 
+			<button
+				class="preview-btn"
+				:class="{ active: previewing }"
+				:disabled="!state.targetDoctype || previewLoading"
+				@click="onPreview"
+			>
+				{{ previewLoading ? 'Loading...' : previewing ? 'Exit Preview' : 'Preview' }}
+			</button>
+
 			<button class="save-btn" :disabled="saving" @click="onSave">
 				{{ saving ? 'Saving...' : 'Save' }}
 			</button>
@@ -36,6 +45,7 @@
 
 			<BuilderCanvas
 				:state="state"
+				:preview-data="previewData"
 				@select="selectElement"
 				@move="moveElement"
 				@resize="resizeElement"
@@ -99,6 +109,9 @@ const secondaryColor = ref("#F5D06C")
 const doctypeOptions = ref<string[]>([])
 const showPathFinder = ref(false)
 const pathFinderTargetId = ref<string | null>(null)
+const previewing = ref(false)
+const previewLoading = ref(false)
+const previewData = ref<Record<string, any>>({})
 
 const spaMetaFetcher = {
 	async fetchMeta(doctype: string) {
@@ -130,7 +143,7 @@ async function fetchDoctypeOptions() {
 		const json = await res.json()
 		doctypeOptions.value = (json.data || []).map((r: any) => r.name)
 	} catch {
-		// WP Tables may not exist yet — leave empty
+		// WP Tables may not exist yet
 	}
 }
 
@@ -158,6 +171,7 @@ function onPathFinderSelect(payload: { mode: string, data: any }) {
 	if (payload.mode === 'field' && pathFinderTargetId.value) {
 		updateElement(pathFinderTargetId.value, {
 			fieldPath: payload.data.resolve_key,
+			fieldPathArray: payload.data.path || [],
 			fieldType: payload.data.terminal_fieldtype,
 			terminalDoctype: payload.data.terminal_doctype,
 			label: payload.data.formkit_schema?.label || payload.data.terminal_field
@@ -170,6 +184,66 @@ function onPathFinderSelect(payload: { mode: string, data: any }) {
 function onPathFinderClose() {
 	showPathFinder.value = false
 	pathFinderTargetId.value = null
+}
+
+async function onPreview() {
+	if (previewing.value) {
+		previewing.value = false
+		previewData.value = {}
+		return
+	}
+
+	if (!state.targetDoctype) return
+
+	const boundElements = state.elements.filter(el => el.config.fieldPath)
+	if (boundElements.length === 0) {
+		alert('No elements have data bindings yet')
+		return
+	}
+
+	previewLoading.value = true
+	try {
+		const csrfToken = (window as any).csrf_token
+			|| document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1]
+			|| ""
+
+		const nameRes = await fetch('/api/method/nce_builder.api.get_random_doc_name', {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'X-Frappe-CSRF-Token': csrfToken, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ doctype: state.targetDoctype }),
+		})
+		if (!nameRes.ok) throw new Error('Failed to get random doc')
+		const nameJson = await nameRes.json()
+		const docname = nameJson.message
+		if (!docname) { alert('No documents found in ' + state.targetDoctype); return }
+
+		const fieldsConfig = boundElements.map(el => ({
+			element_id: el.id,
+			path: el.config.fieldPathArray || [],
+			terminal_field: el.config.fieldPath.split('.').pop() || '',
+		}))
+
+		const resolveRes = await fetch('/api/method/nce_builder.api.resolve_fields', {
+			method: 'POST',
+			credentials: 'include',
+			headers: { 'X-Frappe-CSRF-Token': csrfToken, 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				doctype: state.targetDoctype,
+				docname,
+				fields_config: JSON.stringify(fieldsConfig),
+			}),
+		})
+		if (!resolveRes.ok) throw new Error('Failed to resolve fields')
+		const resolveJson = await resolveRes.json()
+		const resolved = resolveJson.message || {}
+		previewData.value = resolved.values || {}
+		previewing.value = true
+	} catch (e: any) {
+		alert(e.message || 'Preview failed')
+	} finally {
+		previewLoading.value = false
+	}
 }
 
 async function onSave() {
@@ -237,6 +311,20 @@ onMounted(async () => {
 	cursor: pointer;
 }
 .toolbar-select:disabled { color: #9ca3af; cursor: wait; }
+.preview-btn {
+	padding: 6px 16px;
+	background: #f3f4f6;
+	color: #374151;
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 150ms;
+}
+.preview-btn:hover { background: #e5e7eb; }
+.preview-btn.active { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+.preview-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .save-btn {
 	padding: 6px 20px;
 	background: #111827;

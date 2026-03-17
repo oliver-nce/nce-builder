@@ -18,6 +18,7 @@
 				@move="(x: number, y: number) => emit('move', el.id, x, y)"
 				@resize="(w: number, h: number) => emit('resize', el.id, w, h)"
 				@contextmenu="(ev: MouseEvent) => emit('element-contextmenu', el.id, ev)"
+				:preview-value="props.previewData?.[el.id] ?? null"
 			/>
 		</div>
 	</div>
@@ -28,7 +29,7 @@ import { computed, ref } from "vue"
 import type { BuilderState } from "@/composables/useBuilderState"
 import BuilderElement from "./BuilderElement.vue"
 
-const props = defineProps<{ state: BuilderState }>()
+const props = defineProps<{ state: BuilderState; previewData?: Record<string, any> }>()
 const emit = defineEmits<{
 	select: [id: string | null]
 	move: [id: string, x: number, y: number]

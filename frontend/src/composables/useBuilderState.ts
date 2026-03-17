@@ -6,6 +6,7 @@ export interface ElementConfig {
   fieldPath: string
   fieldType: string
   terminalDoctype: string
+  fieldPathArray: Array<{ doctype: string; field: string; fieldtype: string; target: string }>
   editable: boolean
   frameColor: string
 }
@@ -63,6 +64,7 @@ export function useBuilderState(formName: string) {
           fieldPath: '',
           fieldType: '',
           terminalDoctype: '',
+          fieldPathArray: [],
         }
       : {
           label: type === 'field' ? 'New Field' : 'Caption',
@@ -70,6 +72,7 @@ export function useBuilderState(formName: string) {
           fieldPath: '',
           fieldType: '',
           terminalDoctype: '',
+          fieldPathArray: [],
           editable: true,
           frameColor: '',
         }
