@@ -4,7 +4,7 @@
 			<div>
 				<h1 class="form-title">{{ formDef?.title || formName }}</h1>
 				<p v-if="docName" class="form-subtitle">Editing: {{ docName }}</p>
-				<p v-else-if="targetDoctype" class="form-subtitle">New {{ targetDoctype }}</p>
+				<p v-else-if="targetDoctype && !showRecordList" class="form-subtitle">New {{ targetDoctype }}</p>
 			</div>
 			<button class="back-btn" @click="router.back()">Back</button>
 		</div>
@@ -12,14 +12,48 @@
 		<div v-if="defLoading" class="form-message">Loading form definition...</div>
 		<div v-else-if="defError" class="form-message error">Failed to load form definition "{{ formName }}".</div>
 
+		<!-- Record selection for existing forms -->
+		<div v-else-if="showRecordList && !docName" class="record-selector">
+			<div class="selector-header">
+				<h2 class="selector-title">Select a record or create new</h2>
+				<button class="new-record-btn" @click="startNewRecord">+ Create New {{ targetDoctype }}</button>
+			</div>
+
+			<div v-if="recordsLoading" class="form-message">Loading records...</div>
+			<div v-else-if="!records.length" class="form-message">
+				No {{ targetDoctype }} records found.
+				<button @click="startNewRecord" class="inline-btn">Create the first one</button>
+			</div>
+
+			<div v-else class="records-grid">
+				<div
+					v-for="record in records"
+					:key="record.name"
+					class="record-card"
+					@click="selectRecord(record.name)"
+				>
+					<div class="record-name">{{ record.name }}</div>
+					<div v-if="record.title && record.title !== record.name" class="record-title">
+						{{ record.title }}
+					</div>
+					<div class="record-meta">
+						Modified: {{ formatDate(record.modified) }}
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Grid mode (builder layout) -->
-		<template v-else-if="useGridMode">
+		<template v-else-if="useGridMode && !showRecordList">
 			<div v-if="gridLoading" class="form-message">Loading form data...</div>
 			<div v-else-if="gridLockBlocked" class="form-message warning">
 				This record is being edited by {{ gridLockedBy }}. You are viewing in read-only mode.
 			</div>
+			<div v-else-if="!targetDoctype" class="form-message error">
+				No target DocType configured for this form.
+			</div>
 			<GridFormRenderer
-				v-if="gridReady"
+				v-else-if="gridReady"
 				ref="rendererRef"
 				:elements="gridElements"
 				:grid-config="gridConfig"
@@ -47,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from "vue"
+import { ref, computed, watch, onBeforeUnmount, onMounted } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { createResource } from "frappe-ui"
 import { useFormSchema } from "@/composables/useFormSchema"
@@ -60,6 +94,11 @@ const route = useRoute()
 const router = useRouter()
 const formName = computed(() => String(route.params.formName || ""))
 const docName = computed(() => String(route.params.docName || ""))
+
+// Record selection state
+const showRecordList = ref(false)
+const records = ref<any[]>([])
+const recordsLoading = ref(false)
 
 const {
 	formDef, schema, tabLayout, fieldMapping,
@@ -144,12 +183,24 @@ async function apiCall(method: string, args: Record<string, any>) {
 }
 
 async function loadGridData() {
-	if (!docName.value || !targetDoctype.value) return
+	if (!targetDoctype.value) return
+
 	gridLoading.value = true
 	gridReady.value = false
 	gridLockBlocked.value = false
 
 	try {
+		// For new records, skip locking and field resolution
+		if (!docName.value) {
+			gridValues.value = {}
+			gridDocsCache.value = {}
+			gridReadOnly.value = false
+			gridReady.value = true
+			gridLoading.value = false
+			return
+		}
+
+		// For existing records, acquire lock and load data
 		const lockStatus = await apiCall("check_edit_lock", {
 			target_doctype: targetDoctype.value,
 			target_docname: docName.value,
@@ -202,6 +253,45 @@ async function loadGridData() {
 async function handleGridSave(formData: Record<string, any>) {
 	gridSaving.value = true
 	try {
+		// For new records, create a new document
+		if (!docName.value) {
+			const doc: Record<string, any> = { doctype: targetDoctype.value }
+
+			// Map form data to document fields
+			for (const el of gridElements.value) {
+				if (el.type !== 'field' || !el.config.fieldPath || !(el.id in formData)) continue
+
+				// For new records, only handle direct fields (no link chains)
+				const pathArr = el.config.fieldPathArray || []
+				if (pathArr.length === 0) {
+					const fieldName = el.config.fieldPath.replace('doc.', '')
+					doc[fieldName] = formData[el.id]
+				}
+			}
+
+			const saveRes = await fetch("/api/method/frappe.client.insert", {
+				method: "POST",
+				credentials: "include",
+				headers: {
+					"X-Frappe-CSRF-Token": csrfToken(),
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify({ doc })
+			})
+
+			if (!saveRes.ok) throw new Error("Failed to create record")
+			const saveData = await saveRes.json()
+			const newName = saveData.message?.name
+
+			if (newName) {
+				alert("Record created successfully!")
+				router.replace(`/nce/form/${formName.value}/${newName}`)
+			}
+			gridSaving.value = false
+			return
+		}
+
+		// For existing records, use the update logic
 		const updatesByChain: Record<string, {
 			chain_key: string
 			target_doctype: string
@@ -269,9 +359,84 @@ onBeforeUnmount(() => {
 	}
 })
 
-watch([useGridMode, targetDoctype, docName], ([isGrid, dt, dn]) => {
-	if (isGrid && dt && dn) loadGridData()
+watch([useGridMode, targetDoctype, docName], ([isGrid, dt]) => {
+	if (isGrid && dt) loadGridData()
 }, { immediate: true })
+
+// Record selection functions
+async function loadRecords() {
+	if (!targetDoctype.value) return
+
+	recordsLoading.value = true
+	try {
+		const res = await fetch(
+			`/api/resource/${targetDoctype.value}?fields=["name","modified"]&order_by=modified desc&limit_page_length=20`,
+			{ credentials: "include" }
+		)
+		if (!res.ok) throw new Error(`HTTP ${res.status}`)
+		const json = await res.json()
+		records.value = json.data || []
+
+		// Try to get title field if it exists
+		if (records.value.length > 0) {
+			const metaRes = await fetch(`/api/method/frappe.desk.form.load.getdoctype?doctype=${targetDoctype.value}`, {
+				credentials: "include"
+			})
+			if (metaRes.ok) {
+				const metaData = await metaRes.json()
+				const titleField = metaData.docs?.[0]?.title_field
+				if (titleField && titleField !== 'name') {
+					// Reload with title field
+					const resWithTitle = await fetch(
+						`/api/resource/${targetDoctype.value}?fields=["name","modified","${titleField}"]&order_by=modified desc&limit_page_length=20`,
+						{ credentials: "include" }
+					)
+					if (resWithTitle.ok) {
+						const jsonWithTitle = await resWithTitle.json()
+						records.value = jsonWithTitle.data?.map((r: any) => ({
+							...r,
+							title: r[titleField]
+						})) || []
+					}
+				}
+			}
+		}
+	} catch (e) {
+		console.error("Failed to load records:", e)
+		records.value = []
+	} finally {
+		recordsLoading.value = false
+	}
+}
+
+function selectRecord(name: string) {
+	router.push(`/nce/form/${formName.value}/${name}`)
+}
+
+function startNewRecord() {
+	showRecordList.value = false
+}
+
+function formatDate(dateStr: string): string {
+	if (!dateStr) return ""
+	const date = new Date(dateStr)
+	return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+// Show record list on mount if no docName specified
+onMounted(() => {
+	if (!docName.value && targetDoctype.value) {
+		showRecordList.value = true
+		loadRecords()
+	}
+})
+
+watch(targetDoctype, (dt) => {
+	if (!docName.value && dt) {
+		showRecordList.value = true
+		loadRecords()
+	}
+})
 </script>
 
 <style scoped>
@@ -284,4 +449,64 @@ watch([useGridMode, targetDoctype, docName], ([isGrid, dt, dn]) => {
 .form-message { padding: 24px; font-size: 14px; color: #6b7280; }
 .form-message.error { color: #dc2626; }
 .form-message.warning { color: #d97706; background: #fffbeb; border-bottom: 1px solid #fde68a; }
+
+/* Record selector */
+.record-selector { padding: 24px; }
+.selector-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.selector-title { font-size: 16px; font-weight: 600; color: #111827; margin: 0; }
+.new-record-btn {
+	padding: 8px 16px;
+	background: #3b82f6;
+	color: #fff;
+	border: none;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+}
+.new-record-btn:hover { background: #2563eb; }
+.inline-btn {
+	margin-left: 8px;
+	padding: 4px 12px;
+	background: #3b82f6;
+	color: #fff;
+	border: none;
+	border-radius: 4px;
+	font-size: 13px;
+	cursor: pointer;
+}
+.inline-btn:hover { background: #2563eb; }
+.records-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 16px;
+}
+.record-card {
+	padding: 16px;
+	background: #f9fafb;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 150ms;
+}
+.record-card:hover {
+	background: #f3f4f6;
+	border-color: #d1d5db;
+	box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+.record-name {
+	font-size: 14px;
+	font-weight: 600;
+	color: #111827;
+	margin-bottom: 4px;
+}
+.record-title {
+	font-size: 13px;
+	color: #4b5563;
+	margin-bottom: 8px;
+}
+.record-meta {
+	font-size: 11px;
+	color: #9ca3af;
+}
 </style>

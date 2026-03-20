@@ -16,14 +16,19 @@
 					<th>DocType</th>
 					<th>Form Name</th>
 					<th>Enabled</th>
+					<th>Actions</th>
 				</tr>
 			</thead>
 			<tbody>
-				<tr v-for="f in forms" :key="f.name" @click="openForm(f.name)" class="form-row">
+				<tr v-for="f in forms" :key="f.name" class="form-row">
 					<td class="cell-title">{{ f.title || f.name }}</td>
 					<td>{{ f.target_doctype }}</td>
 					<td class="cell-mono">{{ f.name }}</td>
 					<td>{{ f.enabled ? 'Yes' : 'No' }}</td>
+					<td class="cell-actions">
+						<button @click="editForm(f.name)" class="action-btn edit-btn">Edit</button>
+						<button @click="useForm(f.name)" class="action-btn use-btn">Use</button>
+					</td>
 				</tr>
 			</tbody>
 		</table>
@@ -60,8 +65,12 @@ async function fetchForms() {
 	}
 }
 
-function openForm(name: string) {
+function editForm(name: string) {
 	window.location.href = `/nce/builder/${encodeURIComponent(name)}`
+}
+
+function useForm(name: string) {
+	window.location.href = `/nce/form/${encodeURIComponent(name)}`
 }
 
 onMounted(fetchForms)
@@ -123,10 +132,40 @@ onMounted(fetchForms)
 	border-bottom: 1px solid #f3f4f6;
 }
 .form-row {
-	cursor: pointer;
 	transition: background 100ms;
 }
 .form-row:hover { background: #f9fafb; }
 .cell-title { font-weight: 500; color: #111827; }
 .cell-mono { font-family: monospace; font-size: 12px; color: #6b7280; }
+.cell-actions {
+	display: flex;
+	gap: 8px;
+}
+.action-btn {
+	padding: 4px 12px;
+	border-radius: 4px;
+	font-size: 12px;
+	font-weight: 500;
+	border: 1px solid;
+	cursor: pointer;
+	transition: all 150ms;
+}
+.edit-btn {
+	background: #fff;
+	color: #4b5563;
+	border-color: #d1d5db;
+}
+.edit-btn:hover {
+	background: #f3f4f6;
+	border-color: #9ca3af;
+}
+.use-btn {
+	background: #3b82f6;
+	color: #fff;
+	border-color: #3b82f6;
+}
+.use-btn:hover {
+	background: #2563eb;
+	border-color: #2563eb;
+}
 </style>
