@@ -458,6 +458,7 @@ onUnmounted(() => window.removeEventListener("message", handleMessage))
 .preview-surface {
 	background-color: var(--nce-color-surface, #f9fafb);
 	border: 1px solid var(--nce-color-border, #e5e7eb);
+	box-shadow: var(--nce-shadow, 0 1px 2px 0 rgb(0 0 0 / 0.05));
 }
 
 .preview-heading {
