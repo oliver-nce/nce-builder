@@ -95,6 +95,8 @@ const router = useRouter()
 const formName = computed(() => String(route.params.formName || ""))
 const docName = computed(() => String(route.params.docName || ""))
 
+console.log("[FormPage] Initial load - formName:", formName.value, "docName:", docName.value)
+
 // Record selection state
 const showRecordList = ref(false)
 const records = ref<any[]>([])
@@ -105,6 +107,25 @@ const {
 	targetDoctype, submitAction, customApiMethod,
 	loading: defLoading, error: defError,
 } = useFormSchema(formName.value)
+
+// Debug logging for form schema
+watch(defLoading, (loading) => {
+	console.log("[FormPage] defLoading changed:", loading)
+})
+
+watch(defError, (error) => {
+	console.log("[FormPage] defError changed:", error)
+})
+
+watch(formDef, (def) => {
+	console.log("[FormPage] formDef loaded:", def)
+	if (def) {
+		console.log("[FormPage] - title:", def.title)
+		console.log("[FormPage] - target_doctype:", def.target_doctype)
+		console.log("[FormPage] - grid_layout exists:", !!def.grid_layout)
+		console.log("[FormPage] - grid_config exists:", !!def.grid_config)
+	}
+})
 
 // --- Legacy mode state ---
 const docResource = createResource({ url: "frappe.client.get" })
@@ -151,7 +172,11 @@ const gridConfig = computed<GridConfig>(() => {
 	try { return formDef.value?.grid_config ? JSON.parse(formDef.value.grid_config) : { cellSize: 10, gap: 1 } }
 	catch { return { cellSize: 10, gap: 1 } }
 })
-const useGridMode = computed(() => gridElements.value.length > 0)
+const useGridMode = computed(() => {
+	const hasGridElements = gridElements.value.length > 0
+	console.log("[FormPage] useGridMode:", hasGridElements, "elements:", gridElements.value.length)
+	return hasGridElements
+})
 
 const gridLoading = ref(false)
 const gridReady = ref(false)
@@ -365,17 +390,21 @@ watch([useGridMode, targetDoctype, docName], ([isGrid, dt]) => {
 
 // Record selection functions
 async function loadRecords() {
-	if (!targetDoctype.value) return
+	if (!targetDoctype.value) {
+		console.log("[FormPage] loadRecords - no targetDoctype, returning")
+		return
+	}
 
+	console.log("[FormPage] loadRecords - fetching records for:", targetDoctype.value)
 	recordsLoading.value = true
 	try {
-		const res = await fetch(
-			`/api/resource/${targetDoctype.value}?fields=["name","modified"]&order_by=modified desc&limit_page_length=20`,
-			{ credentials: "include" }
-		)
+		const url = `/api/resource/${targetDoctype.value}?fields=["name","modified"]&order_by=modified desc&limit_page_length=20`
+		console.log("[FormPage] Fetching:", url)
+		const res = await fetch(url, { credentials: "include" })
 		if (!res.ok) throw new Error(`HTTP ${res.status}`)
 		const json = await res.json()
 		records.value = json.data || []
+		console.log("[FormPage] Loaded records:", records.value.length)
 
 		// Try to get title field if it exists
 		if (records.value.length > 0) {
@@ -425,14 +454,18 @@ function formatDate(dateStr: string): string {
 
 // Show record list on mount if no docName specified
 onMounted(() => {
+	console.log("[FormPage] Mounted - docName:", docName.value, "targetDoctype:", targetDoctype.value)
 	if (!docName.value && targetDoctype.value) {
+		console.log("[FormPage] Showing record list")
 		showRecordList.value = true
 		loadRecords()
 	}
 })
 
 watch(targetDoctype, (dt) => {
+	console.log("[FormPage] targetDoctype changed:", dt)
 	if (!docName.value && dt) {
+		console.log("[FormPage] Showing record list (from watch)")
 		showRecordList.value = true
 		loadRecords()
 	}

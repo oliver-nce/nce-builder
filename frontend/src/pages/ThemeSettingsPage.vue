@@ -629,6 +629,10 @@ function handleSave() {
 		doctype: "NCE Theme Settings",
 		name: "NCE Theme Settings",
 	}
+	// Include modified timestamp to prevent TimestampMismatchError
+	if (themeDoc.data?.modified) {
+		doc.modified = themeDoc.data.modified
+	}
 	for (const key of ALL_FIELDS) {
 		doc[key] = key === "dark_mode" ? (form[key] ? 1 : 0) : form[key]
 	}
