@@ -613,30 +613,30 @@ const themeDoc = createResource({
 })
 
 const saveDoc = createResource({
-	url: "frappe.client.save",
+	url: "frappe.client.set_value",
 	onSuccess() {
 		saving.value = false
 		themeDoc.reload()
+		regenerateCSS()
 	},
-	onError() {
+	onError(err: any) {
 		saving.value = false
+		console.error("Save error:", err)
 	},
 })
 
 function handleSave() {
 	saving.value = true
-	const doc: Record<string, any> = {
+	// For Single DocTypes, use set_value with fieldname as object of all fields
+	const fieldname: Record<string, any> = {}
+	for (const key of ALL_FIELDS) {
+		fieldname[key] = key === "dark_mode" ? (form[key] ? 1 : 0) : form[key]
+	}
+	saveDoc.submit({
 		doctype: "NCE Theme Settings",
 		name: "NCE Theme Settings",
-	}
-	// Include modified timestamp to prevent TimestampMismatchError
-	if (themeDoc.data?.modified) {
-		doc.modified = themeDoc.data.modified
-	}
-	for (const key of ALL_FIELDS) {
-		doc[key] = key === "dark_mode" ? (form[key] ? 1 : 0) : form[key]
-	}
-	saveDoc.submit({ doc })
+		fieldname: fieldname,
+	})
 }
 
 const regenerateResource = createResource({
