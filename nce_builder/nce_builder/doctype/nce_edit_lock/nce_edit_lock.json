@@ -1,0 +1,74 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-03-16 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "target_doctype",
+  "target_docname",
+  "locked_by",
+  "locked_at",
+  "expires_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Data",
+   "label": "Target DocType",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "target_docname",
+   "fieldtype": "Data",
+   "label": "Target DocName",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "locked_by",
+   "fieldtype": "Data",
+   "label": "Locked By",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "locked_at",
+   "fieldtype": "Datetime",
+   "label": "Locked At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-03-16 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "NCE Builder",
+ "name": "NCE Edit Lock",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Website User"
+  }
+ ],
+ "sort_field": "locked_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}

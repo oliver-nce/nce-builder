@@ -32,6 +32,15 @@
 				{{ previewLoading ? 'Loading...' : previewing ? 'Exit Preview' : 'Preview' }}
 			</button>
 
+			<router-link
+				v-if="formName !== 'new' && state.formName !== 'new'"
+				:to="`/nce/form/${state.formName}`"
+				class="open-form-link"
+				target="_blank"
+			>
+				Open Live Form
+			</router-link>
+
 			<button class="save-btn" :disabled="saving" @click="onSave">
 				{{ saving ? 'Saving...' : 'Save' }}
 			</button>
@@ -325,6 +334,18 @@ onMounted(async () => {
 .preview-btn:hover { background: #e5e7eb; }
 .preview-btn.active { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
 .preview-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.open-form-link {
+	padding: 6px 16px;
+	background: #f3f4f6;
+	color: #374151;
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	text-decoration: none;
+	transition: all 150ms;
+}
+.open-form-link:hover { background: #e5e7eb; }
 .save-btn {
 	padding: 6px 20px;
 	background: #111827;

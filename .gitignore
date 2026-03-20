@@ -35,3 +35,8 @@ var/
 # Frappe build output
 nce_builder/public/dist/
 *.map
+
+# Cursor AI rules (symlinked from shared config)
+.cursor/
+Frappe Context
+.rules
