@@ -341,7 +341,7 @@
 						:style="{
 							backgroundColor: 'var(--nce-color-surface)',
 							borderRadius: 'var(--nce-border-radius)',
-							boxShadow: shadowMap[s],
+							boxShadow: getDynamicShadow(s),
 						}"
 					>{{ s }}</div>
 				</div>
@@ -393,14 +393,26 @@ const progressBars = [
 	{ label: "Tasks Completed", pct: 55, color: "info" },
 ]
 
-const shadowMap: Record<string, string> = {
-	none: "none",
-	sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
-	md: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-	lg: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
-	xl: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-	"2xl": "0 25px 50px -12px rgb(0 0 0 / 0.25)",
-	"3xl": "0 35px 60px -15px rgb(0 0 0 / 0.3)",
+// Shadow definitions using CSS color-mix with dynamic shadow color
+const shadowDefs: Record<string, Array<[number, number, number, number, number]>> = {
+	none: [],
+	sm: [[0, 1, 2, 0, 0.05]],
+	md: [[0, 4, 6, -1, 0.1], [0, 2, 4, -2, 0.1]],
+	lg: [[0, 10, 15, -3, 0.1], [0, 4, 6, -4, 0.1]],
+	xl: [[0, 20, 25, -5, 0.1], [0, 8, 10, -6, 0.1]],
+	"2xl": [[0, 25, 50, -12, 0.25]],
+	"3xl": [[0, 35, 60, -15, 0.3]],
+}
+
+function getDynamicShadow(level: string): string {
+	const defs = shadowDefs[level] || shadowDefs.md
+	if (!defs.length) return "none"
+	return defs
+		.map(([x, y, blur, spread, opacity]) => {
+			const pct = Math.round(opacity * 100)
+			return `${x}px ${y}px ${blur}px ${spread}px color-mix(in srgb, var(--nce-shadow-color, #000000) ${pct}%, transparent)`
+		})
+		.join(", ")
 }
 
 // ─── Page style (applies CSS vars to root for fonts) ──────────────
