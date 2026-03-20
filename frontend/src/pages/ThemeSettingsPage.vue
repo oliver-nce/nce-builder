@@ -612,31 +612,39 @@ const themeDoc = createResource({
 	},
 })
 
-const saveDoc = createResource({
-	url: "frappe.client.set_value",
-	onSuccess() {
-		saving.value = false
+async function handleSave() {
+	saving.value = true
+	try {
+		const doc: Record<string, any> = {}
+		for (const key of ALL_FIELDS) {
+			doc[key] = key === "dark_mode" ? (form[key] ? 1 : 0) : form[key]
+		}
+
+		const res = await fetch("/api/resource/NCE Theme Settings/NCE Theme Settings", {
+			method: "PUT",
+			headers: {
+				"Content-Type": "application/json",
+				"X-Frappe-CSRF-Token": window.csrf_token
+					|| document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1]
+					|| "",
+			},
+			credentials: "include",
+			body: JSON.stringify(doc),
+		})
+
+		if (!res.ok) {
+			const errText = await res.text()
+			console.error("Save failed:", res.status, errText)
+			throw new Error(`Save failed: ${res.status}`)
+		}
+
 		themeDoc.reload()
 		regenerateCSS()
-	},
-	onError(err: any) {
-		saving.value = false
+	} catch (err) {
 		console.error("Save error:", err)
-	},
-})
-
-function handleSave() {
-	saving.value = true
-	// For Single DocTypes, use set_value with fieldname as object of all fields
-	const fieldname: Record<string, any> = {}
-	for (const key of ALL_FIELDS) {
-		fieldname[key] = key === "dark_mode" ? (form[key] ? 1 : 0) : form[key]
+	} finally {
+		saving.value = false
 	}
-	saveDoc.submit({
-		doctype: "NCE Theme Settings",
-		name: "NCE Theme Settings",
-		fieldname: fieldname,
-	})
 }
 
 const regenerateResource = createResource({
