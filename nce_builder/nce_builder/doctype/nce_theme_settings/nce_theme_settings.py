@@ -1,4 +1,5 @@
 import json
+import math
 import os
 
 import frappe
@@ -42,76 +43,137 @@ def _hex_to_rgb(hex_color):
 	return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
 
-def _hex_to_hsl(hex_color):
-	"""Convert hex to HSL (h: 0-360, s: 0-100, l: 0-100)."""
+# ── OKLCH color conversion (perceptually uniform) ──────────────────────────
+
+
+def _srgb_to_linear(c):
+	"""sRGB component (0-1) → linear light."""
+	return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _linear_to_srgb(c):
+	"""Linear light → sRGB component (0-1)."""
+	return 12.92 * c if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
+
+
+def _hex_to_oklch(hex_color):
+	"""Convert hex string → OKLCH (L: 0-1, C: 0-~0.4, h: 0-360)."""
 	hex_color = hex_color.lstrip("#")
-	r = int(hex_color[0:2], 16) / 255
-	g = int(hex_color[2:4], 16) / 255
-	b = int(hex_color[4:6], 16) / 255
-	mx, mn = max(r, g, b), min(r, g, b)
-	h = 0.0
-	s = 0.0
-	l = (mx + mn) / 2
-	if mx != mn:
-		d = mx - mn
-		s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
-		if mx == r:
-			h = ((g - b) / d + (6 if g < b else 0)) / 6
-		elif mx == g:
-			h = ((b - r) / d + 2) / 6
+	r = _srgb_to_linear(int(hex_color[0:2], 16) / 255)
+	g = _srgb_to_linear(int(hex_color[2:4], 16) / 255)
+	b = _srgb_to_linear(int(hex_color[4:6], 16) / 255)
+
+	# linear sRGB → LMS (Oklab M1, sRGB variant)
+	l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+	m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+	s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+
+	# cube-root non-linearity
+	l_ = math.copysign(abs(l) ** (1 / 3), l)
+	m_ = math.copysign(abs(m) ** (1 / 3), m)
+	s_ = math.copysign(abs(s) ** (1 / 3), s)
+
+	# LMS′ → Oklab (M2)
+	L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_
+	a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_
+	b_val = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+
+	C = math.sqrt(a * a + b_val * b_val)
+	h = math.degrees(math.atan2(b_val, a)) % 360
+	return L, C, h
+
+
+def _oklch_to_hex(L, C, h):
+	"""Convert OKLCH → clamped sRGB hex string."""
+	a = C * math.cos(math.radians(h))
+	b_val = C * math.sin(math.radians(h))
+
+	# Oklab → LMS′ (M2 inverse)
+	l_ = L + 0.3963377774 * a + 0.2158037573 * b_val
+	m_ = L - 0.1055613458 * a - 0.0638541728 * b_val
+	s_ = L - 0.0894841775 * a - 1.2914855480 * b_val
+
+	# cube
+	l = l_ * l_ * l_
+	m = m_ * m_ * m_
+	s = s_ * s_ * s_
+
+	# LMS → linear sRGB (M1 inverse)
+	r_lin = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+	g_lin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+	b_lin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+
+	def clamp_byte(v):
+		return round(255 * max(0.0, min(1.0, _linear_to_srgb(max(0.0, min(1.0, v))))))
+
+	return f"#{clamp_byte(r_lin):02x}{clamp_byte(g_lin):02x}{clamp_byte(b_lin):02x}"
+
+
+def _max_chroma_in_gamut(L, h, upper):
+	"""Binary-search for the largest chroma at (L, h) that stays in sRGB."""
+	lo, hi = 0.0, upper
+	for _ in range(24):
+		mid = (lo + hi) / 2
+		a = mid * math.cos(math.radians(h))
+		b_val = mid * math.sin(math.radians(h))
+		l_ = L + 0.3963377774 * a + 0.2158037573 * b_val
+		m_ = L - 0.1055613458 * a - 0.0638541728 * b_val
+		s_ = L - 0.0894841775 * a - 1.2914855480 * b_val
+		l = l_ * l_ * l_
+		m = m_ * m_ * m_
+		s = s_ * s_ * s_
+		r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+		g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+		b = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+		if r < -1e-6 or r > 1 + 1e-6 or g < -1e-6 or g > 1 + 1e-6 or b < -1e-6 or b > 1 + 1e-6:
+			hi = mid
 		else:
-			h = ((r - g) / d + 4) / 6
-	return h * 360, s * 100, l * 100
+			lo = mid
+	return lo
 
 
-def _hsl_to_hex(h, s, l):
-	"""Convert HSL (h: 0-360, s: 0-100, l: 0-100) to hex string."""
-	s /= 100
-	l /= 100
-	a = s * min(l, 1 - l)
-
-	def f(n):
-		k = (n + h / 30) % 12
-		color = l - a * max(min(k - 3, 9 - k, 1), -1)
-		return round(255 * max(0, min(1, color)))
-
-	return f"#{f(0):02x}{f(8):02x}{f(4):02x}"
-
-
-# Tailwind-style shade targets — same as color-shades.ts
+# OKLCH perceptual-lightness targets for each shade stop.
+# Same stops as Tailwind (50–950). Lightness is in OKL space (0–1).
 _SHADE_TARGETS = [
-	(50, 97),
-	(100, 94),
-	(200, 86),
-	(300, 77),
-	(400, 66),
-	(500, 50),
-	(600, 40),
-	(700, 32),
-	(800, 24),
-	(900, 17),
-	(950, 10),
+	(50, 0.97),
+	(100, 0.93),
+	(200, 0.87),
+	(300, 0.78),
+	(400, 0.68),
+	(500, 0.57),
+	(600, 0.48),
+	(700, 0.39),
+	(800, 0.31),
+	(900, 0.23),
+	(950, 0.16),
 ]
 
 
 def _generate_shades(base_hex):
-	"""Generate 11-stop shade scale (50-950) from a base hex color.
+	"""Generate 11-stop shade scale (50–950) from a base hex colour.
 
-	Exact Python port of frontend/src/utils/color-shades.ts generateShades().
+	Uses OKLCH for perceptually uniform lightness steps.
+	Keeps the base colour's hue constant, uses its chroma as the
+	maximum, and gently desaturates at the light/dark extremes
+	where sRGB gamut narrows and full chroma looks artificial.
 	"""
 	if not base_hex or len(base_hex) < 7:
 		return []
-	h, s, _l = _hex_to_hsl(base_hex)
+	_L, base_C, h = _hex_to_oklch(base_hex)
 	result = []
 	for shade, target_l in _SHADE_TARGETS:
-		sat = s
-		if shade <= 100:
-			sat *= 0.75
-		elif shade >= 900:
-			sat *= 0.8
-		elif shade <= 200:
-			sat *= 0.9
-		result.append((shade, _hsl_to_hex(h, min(sat, 100), target_l)))
+		# Cap to sRGB gamut at this lightness
+		max_c = _max_chroma_in_gamut(target_l, h, base_C * 1.5)
+		use_c = min(base_C, max_c)
+		# Desaturate at extremes for subtle tints / deep shades
+		if target_l >= 0.90:
+			t = (target_l - 0.90) / 0.07  # 0→1 from L=0.90 to L=0.97
+			use_c *= max(0.15, 1.0 - t * 0.85)
+		elif target_l <= 0.25:
+			t = (0.25 - target_l) / 0.09  # 0→1 from L=0.25 to L=0.16
+			use_c *= max(0.5, 1.0 - t * 0.5)
+		use_c = min(use_c, max_c)
+		result.append((shade, _oklch_to_hex(target_l, use_c, h)))
 	return result
 
 
