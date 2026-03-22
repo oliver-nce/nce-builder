@@ -6,9 +6,6 @@ app_email = "oliver_reid@me.com"
 app_license = "mit"
 app_logo_url = "/assets/nce_builder/images/logo.jpg"
 
-# Inject theme CSS on every page (site-wide theming)
-app_include_css = ["/assets/nce_builder/css/nce_theme.css"]
-
 # SPA route rules — Frappe serves the Vue app for /nce/* paths
 website_route_rules = [
 	{"from_route": "/nce/<path:app_path>", "to_route": "nce"},

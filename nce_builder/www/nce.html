@@ -5,6 +5,7 @@
 {%- block head_include -%}
 {%- set _v = frappe.utils.now_datetime().timestamp() | int -%}
 <link rel="stylesheet" href="/assets/nce_builder/frontend/assets/nce-builder.css?v={{ _v }}">
+<link rel="stylesheet" href="/assets/nce_builder/css/nce_theme.css?v={{ _v }}">
 <script>window.csrf_token = "{{ frappe.session.csrf_token }}";</script>
 {%- endblock -%}
 
