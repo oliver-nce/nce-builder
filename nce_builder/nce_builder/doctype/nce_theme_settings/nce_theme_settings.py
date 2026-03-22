@@ -28,20 +28,18 @@ LINE_HEIGHT_MAP = {
 
 SHADOW_DEFS = {
 	"none": [],
-	"sm": [(0, 1, 2, 0, 0.05)],
-	"md": [(0, 4, 6, -1, 0.1), (0, 2, 4, -2, 0.1)],
-	"lg": [(0, 10, 15, -3, 0.1), (0, 4, 6, -4, 0.1)],
-	"xl": [(0, 20, 25, -5, 0.1), (0, 8, 10, -6, 0.1)],
-	"2xl": [(0, 25, 50, -12, 0.25)],
-	"3xl": [(0, 35, 60, -15, 0.3)],
+	"sm": [(0, 1, 3, 0, 0.12), (0, 1, 2, -1, 0.08)],
+	"md": [(0, 4, 8, -1, 0.15), (0, 2, 4, -2, 0.1)],
+	"lg": [(0, 10, 20, -3, 0.18), (0, 4, 8, -4, 0.1)],
+	"xl": [(0, 20, 30, -5, 0.22), (0, 8, 12, -6, 0.12)],
+	"2xl": [(0, 25, 50, -12, 0.3)],
+	"3xl": [(0, 35, 60, -15, 0.35)],
 }
 
 
 def _hex_to_rgb(hex_color):
 	hex_color = hex_color.lstrip("#")
 	return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
-
-
 
 
 def _hex_to_hsl(hex_color):
@@ -71,17 +69,28 @@ def _hsl_to_hex(h, s, l):
 	s /= 100
 	l /= 100
 	a = s * min(l, 1 - l)
+
 	def f(n):
 		k = (n + h / 30) % 12
 		color = l - a * max(min(k - 3, 9 - k, 1), -1)
 		return round(255 * max(0, min(1, color)))
+
 	return f"#{f(0):02x}{f(8):02x}{f(4):02x}"
 
 
 # Tailwind-style shade targets — same as color-shades.ts
 _SHADE_TARGETS = [
-	(50, 97), (100, 94), (200, 86), (300, 77), (400, 66),
-	(500, 50), (600, 40), (700, 32), (800, 24), (900, 17), (950, 10),
+	(50, 97),
+	(100, 94),
+	(200, 86),
+	(300, 77),
+	(400, 66),
+	(500, 50),
+	(600, 40),
+	(700, 32),
+	(800, 24),
+	(900, 17),
+	(950, 10),
 ]
 
 
@@ -173,7 +182,6 @@ class NCEThemeSettings(Document):
 			value = self.get(fieldname)
 			if value:
 				lines.append(f"\t--nce-{var_name}: {value};")
-
 
 		# ── Shade scales for brand/status colors ──
 		lines.append("")
@@ -286,7 +294,6 @@ class NCEThemeSettings(Document):
 		lines.append(f"\t--color-info: {info_color};")
 		lines.append(f"\t--color-warning: {warning_color};")
 		lines.append(f"\t--color-danger: {danger_color};")
-
 
 		# Shade scales (standard Tailwind names)
 		for fieldname, (nce_name, std_name) in SHADE_SCALE_FIELDS.items():
