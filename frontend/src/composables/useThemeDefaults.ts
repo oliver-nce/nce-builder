@@ -65,6 +65,22 @@ export const defaultColorScheme = {
   shadow: defaultThemeColors.shadow_color
 }
 
+
+// Shade scales (50–950) for brand/status colors
+const SHADE_COLORS = [
+  "primary", "secondary", "accent", "success", "info", "warning", "danger"
+] as const
+
+const SHADE_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const
+
+// Build shade entries for cssVariableMap
+const shadeVariableMap: Record<string, string> = {}
+for (const color of SHADE_COLORS) {
+  for (const step of SHADE_STEPS) {
+    shadeVariableMap[`${color}_color_${step}`] = `--nce-color-${color}-${step}`
+  }
+}
+
 // CSS variable names mapping
 export const cssVariableMap = {
   primary_color: "--nce-color-primary",
@@ -83,7 +99,8 @@ export const cssVariableMap = {
   surface_color: "--nce-color-surface",
   border_color: "--nce-color-border",
   row_alt_color: "--nce-color-row-alt",
-  shadow_color: "--nce-shadow-color"
+  shadow_color: "--nce-shadow-color",
+  ...shadeVariableMap
 }
 
 /**

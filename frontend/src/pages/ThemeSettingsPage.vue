@@ -412,6 +412,25 @@ function computeCSSVariables(): Record<string, string> {
 	if (form.container_max_width) {
 		vars["--nce-container-max-width"] = form.container_max_width === "full" ? "100%" : form.container_max_width
 	}
+	// Shade scales for brand/status colors (live preview)
+	const SHADE_FIELDS: Array<[string, string]> = [
+		["primary_color", "color-primary"],
+		["secondary_color", "color-secondary"],
+		["accent_color", "color-accent"],
+		["success_color", "color-success"],
+		["info_color", "color-info"],
+		["warning_color", "color-warning"],
+		["danger_color", "color-danger"],
+	]
+	for (const [field, varPrefix] of SHADE_FIELDS) {
+		const hex = form[field as FormKey]
+		if (!hex) continue
+		const shades = generateShades(hex)
+		for (const s of shades) {
+			vars[`--nce-${varPrefix}-${s.shade}`] = s.hex
+			vars[`--${varPrefix}-${s.shade}`] = s.hex
+		}
+	}
 	return vars
 }
 
